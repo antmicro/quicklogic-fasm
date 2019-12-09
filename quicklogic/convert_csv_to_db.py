@@ -6,44 +6,76 @@ from fasm_utils.segbits import Bit
 
 
 class QLDbEntry(DbEntry):
-    def __init__(self, signature: str, coord: tuple, devicecoord=None, macrotype=None):
+    '''Class for extracting DB entries from CSV files for QuickLogic FPGAs.
+
+    The class offers additional constructors for CSV files to generate
+    DBEntry objects. It additionaly verifies the consistency of the
+    coordinates, and flattens the hierarchical entries.
+    '''
+    def __init__(self,
+                 signature: str,
+                 coord: tuple,
+                 devicecoord=None,
+                 macrotype=None):
         super().__init__(signature, [Bit(coord[0], coord[1], True)])
         self.devicecoord = devicecoord
         self.macrotype = macrotype
 
     @classmethod
     def _fix_signature(cls, signature: str):
+        '''Removes not readable characters for fasm module from CSV entries.
+        '''
         return signature.replace('<', '_').replace('>', '_')
-
 
     @classmethod
     def from_csv_line(cls, csvline: list) -> 'QLDbEntry':
-        return cls(cls._fix_signature(csvline[0]), (int(csvline[1]), int(csvline[2])))
-
+        '''Reads the DbEntry from parsed flattened CSV line.'''
+        return cls(cls._fix_signature(csvline[0]),
+                   (int(csvline[1]), int(csvline[2])))
 
     @classmethod
     def from_csv_line_unflattened(cls, csvline: list) -> 'QLDbEntry':
+        '''Reads the initial DbEntry from unflattened CSV line.'''
         return cls(cls._fix_signature(csvline[2]),
                    (int(csvline[3]), int(csvline[4])),
                    (int(csvline[0]), int(csvline[1])),
                    csvline[5])
 
-
     def gen_flatten_macro_type(self, macrodbdata: list):
+        '''Flattens the unflattened DbEntry based on the entries from the list
+        of DbEntry objects that match the macrotype of this DbEntry and yields
+        all flattened entries.
+
+        Parameters
+        ----------
+        macrodbdata: list
+            List of DbEntry objects that contains the macro configuration bits.
+        '''
         for dbentry in macrodbdata:
             newsignature = self.signature + \
-                           dbentry.signature.replace('.' + self.macrotype, '')
+                dbentry.signature.replace('.' + self.macrotype, '')
             newcoord = (self.coords[0].x + dbentry.coords[0].x,
                         self.coords[0].y + dbentry.coords[0].y)
             assert newcoord[0] < 844 and newcoord[1] < 716, \
-                  "Coordinate values are exceeding the maximum values: \
-                   computed ({} {}) limit ({} {})".format(newcoord[0],
-                                                          newcoord[1],
-                                                          844, 716)
+                "Coordinate values are exceeding the maximum values: \
+                 computed ({} {}) limit ({} {})".format(newcoord[0],
+                                                        newcoord[1],
+                                                        844, 716)
             yield QLDbEntry(newsignature, newcoord)
 
 
 def process_csv_data(inputfile: str):
+    '''Converts the CSV file to corresponding CSV line tuples.
+
+    Parameters
+    ----------
+    inputfile: str
+        Name of the CSV file
+
+    Returns
+    -------
+        list: list of tuples containing CSV fields
+    '''
     res = []
     with open(inputfile, 'r') as f:
         reader = csv.reader(f)
@@ -53,6 +85,16 @@ def process_csv_data(inputfile: str):
 
 
 def convert_to_db(csvdata: list, flattened=True):
+    '''Converts the CSV files to the DB file.
+
+    Parameters
+    ----------
+    csvdata: list
+        List of lines from parsed CSV file
+    flattened: boolean
+        Determines if it contains the unflattened file that needs to be
+        processed using the other delivered CSV files.
+    '''
     res = []
     for row in csvdata:
         res.append(QLDbEntry.from_csv_line(row)
@@ -109,7 +151,7 @@ if __name__ == "__main__":
     required_macros = set([dbentry.macrotype for dbentry in macrotop])
 
     for macro in required_macros:
-        if not macro in args.macro_names:
+        if macro not in args.macro_names:
             print("WARNING: some of the macros from the {} file are not \
                    supported by given includes:  {}".format(args.infile,
                                                             macro))
@@ -130,23 +172,28 @@ if __name__ == "__main__":
     with open(args.outfile, 'w') as output:
         for dbentry in macrotop:
             if dbentry.macrotype in macrolibrary:
-                for flattenedentry in dbentry.gen_flatten_macro_type(macrolibrary[dbentry.macrotype]):
+                for flattenedentry in dbentry.gen_flatten_macro_type(
+                        macrolibrary[dbentry.macrotype]):
                     output.write(str(flattenedentry))
-                    if not str(flattenedentry).split(' ')[-1] in coordtoorig:
-                        coordtoorig[str(flattenedentry).split(' ')[-1]] = flattenedentry
+                    coordstr = str(flattenedentry).split(' ')[-1]
+                    featurestr = str(flattenedentry).split(' ')[0]
+                    if coordstr not in coordtoorig:
+                        coordtoorig[coordstr] = flattenedentry
                     else:
-                        print("ORIG: {}".format(coordtoorig[str(flattenedentry).split(' ')[-1]]))
+                        print("ORIG: {}".format(coordtoorig[coordstr]))
                         print("CURR: {}".format(flattenedentry))
-                    if str(flattenedentry).split(' ')[-1] in coordset:
+                    if coordstr in coordset:
                         timesrepeated += 1
-                    if str(flattenedentry).split(' ')[0] in nameset:
+                    if featurestr in nameset:
                         timesrepeatedname += 1
-                    coordset[str(flattenedentry).split(' ')[-1]] += 1
-                    nameset[str(flattenedentry).split(' ')[0]] += 1
+                    coordset[coordstr] += 1
+                    nameset[featurestr] += 1
 
     print("Times the coordinates were repeated:  {}".format(timesrepeated))
     print("Max repetition count: {}".format(max(coordset.values())))
     print("Times the names were repeated:  {}".format(timesrepeatedname))
     print("Max repetition count: {}".format(max(nameset.values())))
-    print("Max WL: {}".format(max([int(x.split('_')[0]) for x in coordset.keys()])))
-    print("Max BL: {}".format(max([int(x.split('_')[1]) for x in coordset.keys()])))
+    print("Max WL: {}".format(
+        max([int(x.split('_')[0]) for x in coordset.keys()])))
+    print("Max BL: {}".format(
+        max([int(x.split('_')[1]) for x in coordset.keys()])))
