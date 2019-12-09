@@ -2,11 +2,13 @@
 
 DEV=ql732b
 SCRIPT=./quicklogic/convert_csv_to_db.py
-CSVLOCDIR=./ql732b
+CSVLOCDIR=./ql732b/csv
 
 CSVLOC=${CSVLOCDIR%/}
 
-python $SCRIPT $CSVLOC/DeviceMacroCoord_$DEV.csv $1 \
+OUTDIR=${1%/}
+
+python $SCRIPT $CSVLOC/DeviceMacroCoord_$DEV.csv $OUTDIR/macro.db \
    --include \
        $CSVLOC/macroTable_$DEV.csv \
        $CSVLOC/macro_clkTable_$DEV.csv \
@@ -27,3 +29,6 @@ python $SCRIPT $CSVLOC/DeviceMacroCoord_$DEV.csv $1 \
        macro_interface_top_left \
        macro_interface_right \
        macro_interface_left
+
+python $SCRIPT $CSVLOC/ColClk_$DEV.csv $OUTDIR/colclk.db
+python $SCRIPT $CSVLOC/TestMacro_$DEV.csv $OUTDIR/testmacro.db
