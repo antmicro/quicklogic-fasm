@@ -1,6 +1,11 @@
 from fasm_utils import fasm_assembler
 from fasm import FasmLine
 import math
+import argparse
+import os
+import errno
+from pathlib import Path
+from fasm_utils.database import Database
 
 
 class QL732BAssembler(fasm_assembler.FasmAssembler):
@@ -43,7 +48,7 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
             else:
                 self.clear_config_bit((coord.x, coord.y), fasmline)
 
-    def produce_bitstream(self, outfilepath: str):
+    def produce_bitstream(self, outfilepath: str, verbose=False):
 
         def get_value_for_coord(bitidx, wlidx, wlshift):
             if (bitidx, wlidx + wlshift) not in self.configbits:
@@ -54,12 +59,9 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
         bitstream = []
 
         for wlidx in range(self.MAXWL // 2 - 1, -1, -1):
-            # print(wlidx)
             for bitnum in range(0, self.BANKNUMBITS):
-                # print(bitnum)
                 currval = 0
                 for banknum in range(self.NUMOFBANKS - 1, -1, -1):
-                    # print('{}_{}_{} {}'.format(wlidx, bitnum, banknum, len(self.BANKSTARTBITIDX)))
                     val = 1
                     bitidx = 0
                     if banknum in (0, 8, 16, 24):
@@ -81,11 +83,58 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
 
                     if val == 1:
                         currval = currval | (1 << banknum)
-                print('{}_{}:  {:02X}'.format(wlidx, bitnum, currval))
+                if verbose: print('{}_{}:  {:02X}'.format(wlidx, bitnum, currval))
                 bitstream.append(currval)
 
-        print('Size of bitstream:  {}B'.format(len(bitstream) * 4))
+        if verbose: print('Size of bitstream:  {}B'.format(len(bitstream) * 4))
 
         with open(outfilepath, 'w+b') as output:
             for batch in bitstream:
                 output.write(batch.to_bytes(4, 'little'))
+
+
+if __name__ == "__main__":
+
+    DB_FILES_DIR = Path(__file__).resolve().parent/'../ql732b/db/'
+
+    parser = argparse.ArgumentParser(
+        description="Converts FASM file to the bitstream"
+    )
+
+    parser.add_argument(
+        "infile",
+        type=Path,
+        help="The input FASM file"
+    )
+
+    parser.add_argument(
+        "outfile",
+        type=Path,
+        help="The output bitstream file"
+    )
+
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Adds some verbose messages during bitstream production"
+    )
+
+    args = parser.parse_args()
+
+    if not args.infile.exists:
+        print("The input file does not exist")
+        exit(errno.ENOENT)
+
+    if not args.outfile.parent.is_dir():
+        print("The path to file is not a valid directory")
+        exit(errno.ENOTDIR)
+
+    db = Database(DB_FILES_DIR)
+    db.add_table('macro', DB_FILES_DIR / 'macro.db')
+    db.add_table('colclk', DB_FILES_DIR / 'colclk.db')
+    db.add_table('testmacro', DB_FILES_DIR / 'testmacro.db')
+
+    assembler = QL732BAssembler(db)
+
+    assembler.parse_fasm_filename(args.infile)
+    assembler.produce_bitstream(args.outfile, verbose=args.verbose)
