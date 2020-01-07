@@ -93,7 +93,7 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                 output.write(batch.to_bytes(4, 'little'))
 
 
-if __name__ == "__main__":
+def main():
 
     DB_FILES_DIR = Path(__file__).resolve().parent/'../ql732b/db/'
 
@@ -138,3 +138,7 @@ if __name__ == "__main__":
 
     assembler.parse_fasm_filename(args.infile)
     assembler.produce_bitstream(args.outfile, verbose=args.verbose)
+
+
+if __name__ == "__main__":
+    main()
