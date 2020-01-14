@@ -94,24 +94,85 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                 output.write(batch.to_bytes(4, 'little'))
 
 
+    def read_bitstream(self, bitfilepath):
+        bitstream = []
+        with open(bitfilepath, 'rb') as input:
+            while True:
+                bytes = input.read(4)
+                if not bytes:
+                    break;
+                bitstream.append(int.from_bytes(bytes, 'little'))
+
+        def set_bit(bitidx, wlidx, wlshift, value):
+            coord = (bitidx, wlidx + wlshift)
+            if value == 1:
+                self.set_config_bit(coord, None)
+            else:
+                self.clear_config_bit(coord, None)
+
+        val = iter(bitstream)
+        for wlidx in reversed(range(self.MAXWL // 2)):
+            for bitnum in range(self.BANKNUMBITS):
+                currval = next(val)
+                for banknum in reversed(range(self.NUMOFBANKS)):
+                    bit = (currval >> banknum) & 1
+                    bitidx = 0
+
+                    if banknum in (0, 8, 16, 24):
+                        if bitnum in (0, 1):
+                            continue
+                        else:
+                            bitidx = self.BANKSTARTBITIDX[banknum] + bitnum - 2
+                    else:
+                        bitidx = self.BANKSTARTBITIDX[banknum] + bitnum
+
+                    if banknum >= self.NUMOFBANKS // 2:
+                        set_bit(bitidx, wlidx, self.MAXWL // 2, bit)
+                    else:
+                        set_bit(bitidx, wlidx, 0, bit)
+
+
+    def disassemble(self, outfilepath: str, verbose=False):
+        features = []
+        for feature in self.db:
+            for bit in feature.coords:
+                coord = (bit.x, bit.y)
+                if coord not in self.configbits \
+                        or bool(self.configbits[coord]) != bit.isset:
+                    break
+            else:
+                features.append(feature.signature)
+                if verbose:
+                    print(f'{feature.signature}')
+
+        with open(outfilepath, 'w') as fasm_file:
+            print(*features, sep='\n', file=fasm_file)
+
+
 def main():
 
     DB_FILES_DIR = Path(__file__).resolve().parent/'../ql732b/db/'
 
     parser = argparse.ArgumentParser(
-        description="Converts FASM file to the bitstream"
+        description="Converts FASM file to the bitstream or the other way around"
     )
 
     parser.add_argument(
         "infile",
         type=Path,
-        help="The input FASM file"
+        help="The input file (FASM, or bitstream when disassembling)"
     )
 
     parser.add_argument(
         "outfile",
         type=Path,
-        help="The output bitstream file"
+        help="The output file (bitstream, or FASM when disassembling)"
+    )
+
+    parser.add_argument(
+        "-d", "--disassemble",
+        action="store_true",
+        help="Disasseble bitstream"
     )
 
     parser.add_argument(
@@ -137,9 +198,12 @@ def main():
 
     assembler = QL732BAssembler(db)
 
-    assembler.parse_fasm_filename(args.infile)
-    assembler.produce_bitstream(args.outfile, verbose=args.verbose)
-
+    if not args.disassemble:
+        assembler.parse_fasm_filename(args.infile)
+        assembler.produce_bitstream(args.outfile, verbose=args.verbose)
+    else:
+        assembler.read_bitstream(args.infile)
+        assembler.disassemble(args.outfile, verbose=args.verbose)
 
 if __name__ == "__main__":
     main()
