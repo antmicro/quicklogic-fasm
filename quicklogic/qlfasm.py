@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from fasm_utils import fasm_assembler
 from fasm import FasmLine
 import math

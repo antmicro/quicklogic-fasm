@@ -8,7 +8,7 @@ CSVLOC=${CSVLOCDIR%/}
 
 OUTDIR=${1%/}
 
-python $SCRIPT $CSVLOC/DeviceMacroCoord_$DEV.csv $OUTDIR/macro.db \
+python3 $SCRIPT $CSVLOC/DeviceMacroCoord_$DEV.csv $OUTDIR/macro.db \
    --include \
        $CSVLOC/macroTable_$DEV.csv \
        $CSVLOC/macro_clkTable_$DEV.csv \
@@ -30,5 +30,5 @@ python $SCRIPT $CSVLOC/DeviceMacroCoord_$DEV.csv $OUTDIR/macro.db \
        macro_interface_right \
        macro_interface_left
 
-python $SCRIPT $CSVLOC/ColClk_$DEV.csv $OUTDIR/colclk.db
-python $SCRIPT $CSVLOC/TestMacro_$DEV.csv $OUTDIR/testmacro.db
+python3 $SCRIPT $CSVLOC/ColClk_$DEV.csv $OUTDIR/colclk.db
+python3 $SCRIPT $CSVLOC/TestMacro_$DEV.csv $OUTDIR/testmacro.db
