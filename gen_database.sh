@@ -6,6 +6,11 @@ CSVLOCDIR=./ql732b/csv
 
 CSVLOC=${CSVLOCDIR%/}
 
+if [[ -z "${1:-}" ]]; then
+   echo "Usage: $0 <out_dir>"
+   exit 1
+fi
+
 OUTDIR=${1%/}
 
 python3 $SCRIPT $CSVLOC/DeviceMacroCoord_$DEV.csv $OUTDIR/macro.db \
