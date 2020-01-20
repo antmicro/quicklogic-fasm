@@ -4,6 +4,7 @@ import argparse
 from collections import defaultdict
 from fasm_utils.db_entry import DbEntry
 from fasm_utils.segbits import Bit
+import techfile_to_cell_loc
 
 
 class QLDbEntry(DbEntry):
@@ -136,6 +137,12 @@ if __name__ == "__main__":
         "--macro-names",
         nargs='+',
         help="The list of macro names corresponding to the include files"
+    )
+
+    parser.add_argument(
+        "--techfile",
+        type=str,
+        help="The input TechFile XML file"
     )
     args = parser.parse_args()
 
