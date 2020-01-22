@@ -37,9 +37,14 @@ class QLDbEntry(DbEntry):
     @classmethod
     def from_csv_line_unflattened(cls, csvline: list) -> 'QLDbEntry':
         '''Reads the initial DbEntry from unflattened CSV line.'''
-        return cls(cls._fix_signature(csvline[2]),
+        devicecoord = (int(csvline[1]), int(csvline[0]))
+        signature = cls._fix_signature(csvline[2])
+        signature = 'x{site[0]}y{site[1]}.{sig}'.format(
+                site=devicecoord,
+                sig=signature)
+        return cls(signature,
                    (int(csvline[3]), int(csvline[4])),
-                   (int(csvline[0]), int(csvline[1])),
+                   devicecoord,
                    csvline[5])
 
     def gen_flatten_macro_type(self, macrodbdata: list):
@@ -62,7 +67,7 @@ class QLDbEntry(DbEntry):
                  computed ({} {}) limit ({} {})".format(newcoord[0],
                                                         newcoord[1],
                                                         844, 716)
-            yield QLDbEntry(newsignature, newcoord)
+            yield QLDbEntry(newsignature, newcoord, self.devicecoord, self.macrotype)
 
 
 def process_csv_data(inputfile: str):
