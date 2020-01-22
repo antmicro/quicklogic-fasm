@@ -51,11 +51,12 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
 
     def produce_bitstream(self, outfilepath: str, verbose=False):
 
-        def get_value_for_coord(bitidx, wlidx, wlshift):
-            if (bitidx, wlidx + wlshift) not in self.configbits:
+        def get_value_for_coord(wlidx, wlshift, bitidx):
+            coord = (wlidx + wlshift, bitidx)
+            if coord not in self.configbits:
                 return -1
             else:
-                return self.configbits[(bitidx, wlidx + wlshift)]
+                return self.configbits[coord]
 
         bitstream = []
 
@@ -73,11 +74,10 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                             bitidx = self.BANKSTARTBITIDX[banknum] + bitnum - 2
                     else:
                         bitidx = self.BANKSTARTBITIDX[banknum] + bitnum
-
                     if banknum >= self.NUMOFBANKS // 2:
-                        val = get_value_for_coord(bitidx, wlidx, self.MAXWL // 2)
+                        val = get_value_for_coord(wlidx, self.MAXWL // 2, bitidx)
                     else:
-                        val = get_value_for_coord(bitidx, wlidx, 0)
+                        val = get_value_for_coord(wlidx, 0, bitidx)
 
                     if val == -1:
                         val = 0
@@ -103,8 +103,8 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                     break;
                 bitstream.append(int.from_bytes(bytes, 'little'))
 
-        def set_bit(bitidx, wlidx, wlshift, value):
-            coord = (bitidx, wlidx + wlshift)
+        def set_bit(wlidx, wlshift, bitidx, value):
+            coord = (wlidx + wlshift, bitidx)
             if value == 1:
                 self.set_config_bit(coord, None)
             else:
@@ -127,9 +127,9 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                         bitidx = self.BANKSTARTBITIDX[banknum] + bitnum
 
                     if banknum >= self.NUMOFBANKS // 2:
-                        set_bit(bitidx, wlidx, self.MAXWL // 2, bit)
+                        set_bit(wlidx, self.MAXWL // 2, bitidx, bit)
                     else:
-                        set_bit(bitidx, wlidx, 0, bit)
+                        set_bit(wlidx, 0, bitidx, bit)
 
 
     def disassemble(self, outfilepath: str, verbose=False):
