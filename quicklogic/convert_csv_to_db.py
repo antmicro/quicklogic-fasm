@@ -7,6 +7,7 @@ from fasm_utils.segbits import Bit
 from techfile_to_cell_loc import TechFile
 from configbitsfile import MacroSpecificBitsTable, DeviceMacroCoordsTable
 from contextlib import nullcontext
+import re
 
 from pprint import pprint as pp
 
@@ -22,6 +23,13 @@ class QLDbEntry(DbEntry):
     ----------
     macrotype_to_celltype: dict
         Map from macro type to hardware cell type.
+    dbentrytemplate: str
+        The format for flattened macro database for QuickLogic.
+        The fields are following:
+        * site[0] - cell row
+        * site[1] - cell column
+        * ctype - cell type, can be LOGIC, QMUX, GMUX, INTERFACE
+        * spectype - the subtype for a given ctype, used to group inverters
     '''
 
     macrotype_to_celltype = {
@@ -29,25 +37,39 @@ class QLDbEntry(DbEntry):
         'macro_clk': 'QMUX',
         'macro_gclk': 'GMUX',
         'macro_interface': 'INTERFACE',
-        'macro_interface_left': 'INTERFACE_LEFT',
-        'macro_interface_right': 'INTERFACE_RIGHT',
-        'macro_interface_top': 'INTERFACE_TOP',
-        'macro_interface_top_left': 'INTERFACE_TOP_LEFT',
-        'macro_interface_top_right': 'INTERFACE_TOP_RIGHT'
+        'macro_interface_left': 'INTERFACE',
+        'macro_interface_right': 'INTERFACE',
+        'macro_interface_top': 'INTERFACE',
+        'macro_interface_top_left': 'INTERFACE',
+        'macro_interface_top_right': 'INTERFACE'
     }
 
-    dbentrytemplate = 'x{site[0]}y{site[1]}.{site[0]}_{site[1]}_{ctype}.{ctype}.{sig}'
+    dbentrytemplate = 'X{site[0]}Y{site[1]}.{site[0]}_{site[1]}_{ctype}.{ctype}.{spectype}.{sig}'
 
     def __init__(self,
                  signature: str,
                  coord: tuple,
                  devicecoord=None,
-                 macrotype=None):
+                 macrotype=None,
+                 spectype=None):
         super().__init__(signature, [Bit(coord[0], coord[1], True)])
         self.devicecoord = devicecoord
         self.macrotype = macrotype
         self.celltype = None if self.macrotype is None else self.macrotype_to_celltype[self.macrotype]
+        self.is_routing_bit = ('street' in signature) or ('highway' in signature)
+        self.spectype = spectype
+        self.originalsignature = signature
 
+
+    def update_flattened_signature(self):
+        '''Updates the signature for flattened entry so it follows the format
+        introduced in `dbentrytemplate`.
+        '''
+        self.signature = self.dbentrytemplate.format(
+                site=self.devicecoord,
+                ctype=self.macrotype_to_celltype[self.macrotype],
+                spectype=self.spectype,
+                sig=self.originalsignature)
 
     @classmethod
     def _fix_signature(cls, signature: str):
@@ -70,16 +92,13 @@ class QLDbEntry(DbEntry):
         signature = cls._fix_signature(csvline[2])
         celltype = cls.macrotype_to_celltype[macrotype]
 
-        signature = cls.dbentrytemplate.format(
-                site=devicecoord,
-                ctype=celltype,
-                sig=signature)
         return cls(signature,
                    bitcoord,
                    devicecoord,
+                   macrotype,
                    macrotype)
 
-    def gen_flatten_macro_type(self, macrodbdata: list):
+    def gen_flatten_macro_type(self, macrodbdata: list, invertermap: dict):
         '''Flattens the unflattened DbEntry based on the entries from the list
         of DbEntry objects that match the macrotype of this DbEntry and yields
         all flattened entries.
@@ -88,10 +107,19 @@ class QLDbEntry(DbEntry):
         ----------
         macrodbdata: list
             List of DbEntry objects that contains the macro configuration bits.
+        invertermap: dict
+            Dictionary that for each inverter name tells what inputs are
+            inverted and for what kind of cell.
         '''
         for dbentry in macrodbdata:
+            bitname = dbentry.signature.replace('.' + self.macrotype + '.', '')
             newsignature = self.signature + \
                 dbentry.signature.replace('.' + self.macrotype, '')
+            newspectype = self.celltype
+            if bitname in invertermap[self.macrotype]:
+                newsignature += '.' + invertermap[self.macrotype][bitname]["invertedsignals"]
+                newspectype = invertermap[self.macrotype][bitname]["celltype"]
+
             newcoord = (self.coords[0].x + dbentry.coords[0].x,
                         self.coords[0].y + dbentry.coords[0].y)
             assert newcoord[0] < 844 and newcoord[1] < 716, \
@@ -99,7 +127,9 @@ class QLDbEntry(DbEntry):
                  computed ({} {}) limit ({} {})".format(newcoord[0],
                                                         newcoord[1],
                                                         844, 716)
-            yield QLDbEntry(newsignature, newcoord, self.devicecoord, self.macrotype)
+            newentry = QLDbEntry(newsignature, newcoord, self.devicecoord, self.macrotype, newspectype)
+            newentry.update_flattened_signature()
+            yield newentry
 
 
 def process_csv_data(inputfile: str):
@@ -183,6 +213,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # Load CSV files. If the CSV is flattened, just print the output
     if not args.include:
         csvdata = process_csv_data(args.infile)
         dbdata = convert_to_db(csvdata)
@@ -195,6 +226,7 @@ if __name__ == "__main__":
                given includes")
         exit(1)
 
+    # Load top CSV and convert it to QuickLogic database
     macrotopcsv = process_csv_data(args.infile)
     macrotop = convert_to_db(macrotopcsv, flattened=False)
 
@@ -206,24 +238,30 @@ if __name__ == "__main__":
                    supported by given includes:  {}".format(args.infile,
                                                             macro))
 
+    # Load includes for top
     macrolibrary = {}
     for macrotype, include in zip(args.macro_names, args.include):
         includecsv = process_csv_data(include)
         dbentries = convert_to_db(includecsv)
         macrolibrary[macrotype] = dbentries
 
-    macro_specific_bits = MacroSpecificBitsTable()
-    for include in args.include:
-        macro_specific_bits.parse(include)
-
-    device_macro_coords = DeviceMacroCoordsTable()
-    device_macro_coords.parse(args.infile)
-
+    # Load techfile for additional information for inverters
     tech_file = TechFile()
     tech_file.parse(args.techfile)
     cells_matrix = tech_file.cells
     inv_ports_info = tech_file.inv_ports_info
 
+    # Convert inv_ports_info hierarchical dictionary so it maps the DB entry
+    # name to specific cell type and the list of inverted signals
+    invertermap = defaultdict(dict)
+    for celltype in inv_ports_info.keys():
+        for invtype in inv_ports_info[celltype]:
+            invertedsignals = '__'.join(inv_ports_info[celltype][invtype])
+            macrotype = invtype.split('.')[1]
+            invertername = invtype.replace('.{}.'.format(macrotype), '')
+            invertermap[macrotype][invertername] = {
+                    'celltype': celltype,
+                    'invertedsignals': invertedsignals}
 
     coordset = defaultdict(int)
     nameset = defaultdict(int)
@@ -232,31 +270,37 @@ if __name__ == "__main__":
     timesrepeated = 0
     timesrepeatedname = 0
 
+    flattenedlibrary = []
+
+    # Flatten the top database based on inputs
+    for dbentry in macrotop:
+        if dbentry.macrotype in macrolibrary:
+            for flattenedentry in dbentry.gen_flatten_macro_type(
+                    macrolibrary[dbentry.macrotype], invertermap):
+                flattenedlibrary.append(flattenedentry)
+
+    # Save the final database and perform sanity checks
     with open(args.outfile, 'w') as output:
         with (open(args.routing_bits_outfile, 'w')
                 if args.routing_bits_outfile else nullcontext()) as routingoutput:
-            for dbentry in macrotop:
-                if dbentry.macrotype in macrolibrary:
-                    for flattenedentry in dbentry.gen_flatten_macro_type(
-                            macrolibrary[dbentry.macrotype]):
-                        if ('street' in flattenedentry.signature or 
-                                'highway' in flattenedentry.signature) and args.routing_bits_outfile:
-                            routingoutput.write(str(flattenedentry))
-                        else:
-                            output.write(str(flattenedentry))
-                        coordstr = str(flattenedentry).split(' ')[-1]
-                        featurestr = str(flattenedentry).split(' ')[0]
-                        if coordstr not in coordtoorig:
-                            coordtoorig[coordstr] = flattenedentry
-                        else:
-                            print("ORIG: {}".format(coordtoorig[coordstr]))
-                            print("CURR: {}".format(flattenedentry))
-                        if coordstr in coordset:
-                            timesrepeated += 1
-                        if featurestr in nameset:
-                            timesrepeatedname += 1
-                        coordset[coordstr] += 1
-                        nameset[featurestr] += 1
+            for flattenedentry in flattenedlibrary:
+                if flattenedentry.is_routing_bit and args.routing_bits_outfile:
+                    routingoutput.write(str(flattenedentry))
+                else:
+                    output.write(str(flattenedentry))
+                coordstr = str(flattenedentry).split(' ')[-1]
+                featurestr = str(flattenedentry).split(' ')[0]
+                if coordstr not in coordtoorig:
+                    coordtoorig[coordstr] = flattenedentry
+                else:
+                    print("ORIG: {}".format(coordtoorig[coordstr]))
+                    print("CURR: {}".format(flattenedentry))
+                if coordstr in coordset:
+                    timesrepeated += 1
+                if featurestr in nameset:
+                    timesrepeatedname += 1
+                coordset[coordstr] += 1
+                nameset[featurestr] += 1
 
     print("Times the coordinates were repeated:  {}".format(timesrepeated))
     print("Max repetition count: {}".format(max(coordset.values())))
