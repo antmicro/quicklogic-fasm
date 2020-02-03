@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 import csv
 import argparse
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from fasm_utils.db_entry import DbEntry
 from fasm_utils.segbits import Bit
-import techfile_to_cell_loc
+from techfile_to_cell_loc import TechFile
+from configbitsfile import MacroSpecificBitsTable, DeviceMacroCoordsTable
+from contextlib import nullcontext
+
+from pprint import pprint as pp
 
 
 class QLDbEntry(DbEntry):
@@ -13,7 +17,27 @@ class QLDbEntry(DbEntry):
     The class offers additional constructors for CSV files to generate
     DBEntry objects. It additionaly verifies the consistency of the
     coordinates, and flattens the hierarchical entries.
+
+    Attributes
+    ----------
+    macrotype_to_celltype: dict
+        Map from macro type to hardware cell type.
     '''
+
+    macrotype_to_celltype = {
+        'macro': 'LOGIC',
+        'macro_clk': 'QMUX',
+        'macro_gclk': 'GMUX',
+        'macro_interface': 'INTERFACE',
+        'macro_interface_left': 'INTERFACE_LEFT',
+        'macro_interface_right': 'INTERFACE_RIGHT',
+        'macro_interface_top': 'INTERFACE_TOP',
+        'macro_interface_top_left': 'INTERFACE_TOP_LEFT',
+        'macro_interface_top_right': 'INTERFACE_TOP_RIGHT'
+    }
+
+    dbentrytemplate = 'x{site[0]}y{site[1]}.{site[0]}_{site[1]}_{ctype}.{ctype}.{sig}'
+
     def __init__(self,
                  signature: str,
                  coord: tuple,
@@ -22,6 +46,8 @@ class QLDbEntry(DbEntry):
         super().__init__(signature, [Bit(coord[0], coord[1], True)])
         self.devicecoord = devicecoord
         self.macrotype = macrotype
+        self.celltype = None if self.macrotype is None else self.macrotype_to_celltype[self.macrotype]
+
 
     @classmethod
     def _fix_signature(cls, signature: str):
@@ -38,15 +64,20 @@ class QLDbEntry(DbEntry):
     @classmethod
     def from_csv_line_unflattened(cls, csvline: list) -> 'QLDbEntry':
         '''Reads the initial DbEntry from unflattened CSV line.'''
+        macrotype = csvline[5]
         devicecoord = (int(csvline[1]), int(csvline[0]))
+        bitcoord = (int(csvline[3]), int(csvline[4]))
         signature = cls._fix_signature(csvline[2])
-        signature = 'x{site[0]}y{site[1]}.{sig}'.format(
+        celltype = cls.macrotype_to_celltype[macrotype]
+
+        signature = cls.dbentrytemplate.format(
                 site=devicecoord,
+                ctype=celltype,
                 sig=signature)
         return cls(signature,
-                   (int(csvline[3]), int(csvline[4])),
+                   bitcoord,
                    devicecoord,
-                   csvline[5])
+                   macrotype)
 
     def gen_flatten_macro_type(self, macrodbdata: list):
         '''Flattens the unflattened DbEntry based on the entries from the list
@@ -128,6 +159,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--routing-bits-outfile",
+        type=str,
+        help="The additional output file that will store routing bits separately"
+    )
+
+    parser.add_argument(
         "--include",
         nargs='+',
         help="The list of include files to use for macro replacement"
@@ -175,6 +212,19 @@ if __name__ == "__main__":
         dbentries = convert_to_db(includecsv)
         macrolibrary[macrotype] = dbentries
 
+    macro_specific_bits = MacroSpecificBitsTable()
+    for include in args.include:
+        macro_specific_bits.parse(include)
+
+    device_macro_coords = DeviceMacroCoordsTable()
+    device_macro_coords.parse(args.infile)
+
+    tech_file = TechFile()
+    tech_file.parse(args.techfile)
+    cells_matrix = tech_file.cells
+    inv_ports_info = tech_file.inv_ports_info
+
+
     coordset = defaultdict(int)
     nameset = defaultdict(int)
     coordtoorig = {}
@@ -183,24 +233,30 @@ if __name__ == "__main__":
     timesrepeatedname = 0
 
     with open(args.outfile, 'w') as output:
-        for dbentry in macrotop:
-            if dbentry.macrotype in macrolibrary:
-                for flattenedentry in dbentry.gen_flatten_macro_type(
-                        macrolibrary[dbentry.macrotype]):
-                    output.write(str(flattenedentry))
-                    coordstr = str(flattenedentry).split(' ')[-1]
-                    featurestr = str(flattenedentry).split(' ')[0]
-                    if coordstr not in coordtoorig:
-                        coordtoorig[coordstr] = flattenedentry
-                    else:
-                        print("ORIG: {}".format(coordtoorig[coordstr]))
-                        print("CURR: {}".format(flattenedentry))
-                    if coordstr in coordset:
-                        timesrepeated += 1
-                    if featurestr in nameset:
-                        timesrepeatedname += 1
-                    coordset[coordstr] += 1
-                    nameset[featurestr] += 1
+        with (open(args.routing_bits_outfile, 'w')
+                if args.routing_bits_outfile else nullcontext()) as routingoutput:
+            for dbentry in macrotop:
+                if dbentry.macrotype in macrolibrary:
+                    for flattenedentry in dbentry.gen_flatten_macro_type(
+                            macrolibrary[dbentry.macrotype]):
+                        if ('street' in flattenedentry.signature or 
+                                'highway' in flattenedentry.signature) and args.routing_bits_outfile:
+                            routingoutput.write(str(flattenedentry))
+                        else:
+                            output.write(str(flattenedentry))
+                        coordstr = str(flattenedentry).split(' ')[-1]
+                        featurestr = str(flattenedentry).split(' ')[0]
+                        if coordstr not in coordtoorig:
+                            coordtoorig[coordstr] = flattenedentry
+                        else:
+                            print("ORIG: {}".format(coordtoorig[coordstr]))
+                            print("CURR: {}".format(flattenedentry))
+                        if coordstr in coordset:
+                            timesrepeated += 1
+                        if featurestr in nameset:
+                            timesrepeatedname += 1
+                        coordset[coordstr] += 1
+                        nameset[featurestr] += 1
 
     print("Times the coordinates were repeated:  {}".format(timesrepeated))
     print("Max repetition count: {}".format(max(coordset.values())))
@@ -210,3 +266,4 @@ if __name__ == "__main__":
         max([int(x.split('_')[0]) for x in coordset.keys()])))
     print("Max BL: {}".format(
         max([int(x.split('_')[1]) for x in coordset.keys()])))
+

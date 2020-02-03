@@ -4,6 +4,7 @@ from collections import namedtuple
 import xml.etree.ElementTree as ET
 from pprint import pprint as pp
 import itertools
+from configbitsfile import MacroSpecificBit
 
 
 def _cellmatrix2html(cm):
@@ -232,6 +233,33 @@ class CellMatrix(object):
             if cell not in slot:
                 slot.append(cell)
 
+class InvPortsInfo(dict):
+    '''bit name -> [port name, ...] mapping for single cell type'''
+    def __init__(self, type):
+        self.cell_type = type
+
+    @property
+    def macro_type(self):
+        # Do not use "name" attribute from cell type group ("<LOGIC ...", etc),
+        # as it is a bit different than macro type used in CSV files.
+        if len(self) > 0:
+            some_key = next(iter(self.keys()))
+            return MacroSpecificBit(some_key, 0, 0).macro_type
+        else:
+            return None
+
+
+class InvPortsInfoTable(dict):
+    '''cell type -> InvPortInfo mapping'''
+    def __init__(self):
+        self.supported_bit_types = set()
+
+    def add(self, port_info):
+        for bit_name in port_info.keys():
+            bit_type = MacroSpecificBit(bit_name, 0, 0).bit_type
+            self.supported_bit_types.add(bit_type)
+        self[port_info.cell_type] = port_info
+
 
 def _parse_matrix(matrix):
     attrs = matrix.attrib
@@ -243,14 +271,28 @@ def _parse_matrix(matrix):
 class TechFile(object):
     def __init__(self):
         self._xml = None
-        self.geometry = Rectangle()
         self.cells = CellMatrix()
+        self.inv_ports_info = InvPortsInfoTable()
 
     def parse(self, file_name):
         self._xml = ET.parse(file_name).getroot()
         geometry = self._parse_geometry()
         self.cells = CellMatrix(geometry)
         self._parse_placement()
+
+        self._parse_inv_ports_info()
+
+    def _parse_inv_ports_info(self):
+        inv_ports_info = self._xml.find('./Programming/CdlToInvPortInfo')
+        for cell_bits in inv_ports_info:
+            ipi = InvPortsInfo(cell_bits.tag)
+            for bit in cell_bits:
+                bit_name = bit.attrib['cdl_name']
+                port_name = bit.attrib['mport_name']
+                # remove [] because it leads to FASM module error
+                port_name = port_name.replace('[', '_').replace(']', '_')
+                ipi.setdefault(bit_name, []).append(port_name)
+            self.inv_ports_info.add(ipi)
 
     def _parse_geometry(self):
         ranges = {
@@ -267,7 +309,6 @@ class TechFile(object):
         rs = min(ranges['RowStartNum'] or [0])
         re = max(ranges['RowEndNum'] or [rs])
         return Rectangle(cs, rs, ce-cs+1, re-rs+1)
-
 
     def _parse_placement(self):
         cell_groups = self._xml.find('./Placement')
@@ -289,7 +330,7 @@ class TechFile(object):
 
                     for pos in logic_geometry:
                         if pos not in logic_holes:
-                            self.cells.add_cell(Cell(group='LOGIC', position=pos))
+                            self.cells.add_cell(Cell(group='LOGIC', position=pos, type='LOGIC'))
 
             # Common placement tags
             for c in cg.iter('Cell'):
