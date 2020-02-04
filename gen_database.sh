@@ -15,6 +15,8 @@ fi
 
 OUTDIR=${1%/}
 
+rm -rf $OUTDIR/*
+
 python3 $SCRIPT $CSVLOC/DeviceMacroCoord_$DEV.csv $OUTDIR/macro.db \
    --include \
        $CSVLOC/macroTable_$DEV.csv \
