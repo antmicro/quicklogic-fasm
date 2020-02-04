@@ -44,7 +44,7 @@ class QLDbEntry(DbEntry):
         'macro_interface_top_right': 'INTERFACE'
     }
 
-    dbentrytemplate = 'X{site[0]}Y{site[1]}.{site[0]}_{site[1]}_{ctype}.{ctype}.{spectype}.{sig}'
+    dbentrytemplate = 'X{site[0]}Y{site[1]}.{ctype}.{spectype}.{sig}'
 
     def __init__(self,
                  signature: str,
