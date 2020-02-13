@@ -289,9 +289,10 @@ class TechFile(object):
             for bit in cell_bits:
                 bit_name = bit.attrib['cdl_name']
                 port_name = bit.attrib['mport_name']
+                is_zinv = bool(int(bit.attrib['non_inverted_value']))
                 # remove [] because it leads to FASM module error
                 port_name = port_name.replace('[', '_').replace(']', '_')
-                ipi.setdefault(bit_name, []).append(port_name)
+                ipi.setdefault(bit_name, []).append((port_name, is_zinv))
             self.inv_ports_info.add(ipi)
 
     def _parse_geometry(self):

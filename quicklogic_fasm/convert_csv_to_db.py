@@ -60,16 +60,49 @@ class QLDbEntry(DbEntry):
         self.spectype = spectype
         self.originalsignature = signature
 
+    @staticmethod
+    def _simplify_signature(signature):
+        '''Simplifies the signature by removing redundant / not relevant
+        information from it'''
 
-    def update_flattened_signature(self):
+        parts = signature.split(".")
+
+        # Remove "Ipsm" and "I_jcb" from the signature
+        for word in ["Ipsm", "I_jcb"]:
+            if word in parts:
+                parts.remove(word)
+
+        # Remove everything before these:
+        for word in ["I_highway", "I_street", "I_invblock", "Ipwr_gates", "I_if_block"]:
+            if word in parts:
+                idx = parts.index(word)
+                parts = parts[idx:]
+
+        # Remove everything before "IQTFC_Z_*"
+        for part in parts:
+            if part.startswith("IQTFC_Z_"):
+                idx = parts.index(part)
+                parts = parts[idx:]
+                break
+
+        signature = ".".join(parts)
+        return signature
+
+    def update_flattened_signature(self, simplify=False):
         '''Updates the signature for flattened entry so it follows the format
         introduced in `dbentrytemplate`.
         '''
+
+        signature = self.originalsignature
+
+        if simplify:
+            signature = self._simplify_signature(signature)
+
         self.signature = self.dbentrytemplate.format(
                 site=self.devicecoord,
                 ctype=self.macrotype_to_celltype[self.macrotype],
                 spectype=self.spectype,
-                sig=self.originalsignature)
+                sig=signature)
 
     @classmethod
     def _fix_signature(cls, signature: str):
@@ -117,8 +150,15 @@ class QLDbEntry(DbEntry):
                 dbentry.signature.replace('.' + self.macrotype, '')
             newspectype = self.celltype
             if bitname in invertermap[self.macrotype]:
-                newsignature += '.' + invertermap[self.macrotype][bitname]["invertedsignals"]
-                newspectype = invertermap[self.macrotype][bitname]["celltype"]
+                info = invertermap[self.macrotype][bitname]
+                part = '{}.{}'.format("ZINV" if info["is_zinv"] else "INV",
+                                      info["invertedsignals"])
+                newspectype = info["celltype"]
+
+                if newspectype in ['QMUX', 'GMUX']:
+                    newsignature += "." + part
+                else:
+                    newsignature  = part
 
             newcoord = (self.coords[0].x + dbentry.coords[0].x,
                         self.coords[0].y + dbentry.coords[0].y)
@@ -128,7 +168,7 @@ class QLDbEntry(DbEntry):
                                                         newcoord[1],
                                                         844, 716)
             newentry = QLDbEntry(newsignature, newcoord, self.devicecoord, self.macrotype, newspectype)
-            newentry.update_flattened_signature()
+            newentry.update_flattened_signature(True)
             yield newentry
 
 
@@ -256,12 +296,17 @@ if __name__ == "__main__":
     invertermap = defaultdict(dict)
     for celltype in inv_ports_info.keys():
         for invtype in inv_ports_info[celltype]:
-            invertedsignals = '__'.join(inv_ports_info[celltype][invtype])
+            names = [b[0] for b in inv_ports_info[celltype][invtype]]
+            zinv  = [b[1] for b in inv_ports_info[celltype][invtype]]
+            assert len(set(zinv)) == 1, (names, zinv)
+            invertedsignals = '__'.join(names)
             macrotype = invtype.split('.')[1]
             invertername = invtype.replace('.{}.'.format(macrotype), '')
             invertermap[macrotype][invertername] = {
                     'celltype': celltype,
-                    'invertedsignals': invertedsignals}
+                    'invertedsignals': invertedsignals,
+                    'is_zinv': zinv[0]
+            }
 
     coordset = defaultdict(int)
     nameset = defaultdict(int)
@@ -298,6 +343,7 @@ if __name__ == "__main__":
                 if coordstr in coordset:
                     timesrepeated += 1
                 if featurestr in nameset:
+                    print("ERROR: Duplicated fasm feature '{}'".format(featurestr))
                     timesrepeatedname += 1
                 coordset[coordstr] += 1
                 nameset[featurestr] += 1
