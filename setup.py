@@ -12,7 +12,7 @@ setuptools.setup(
     author="Antmicro Ltd.",
     author_email="contact@antmicro.com",
     entry_points={
-        'console_scripts': ['qlfasm=quicklogic.qlfasm:main']
+        'console_scripts': ['qlfasm=quicklogic_fasm.qlfasm:main']
     },
     include_package_data=True,
     classifiers=[
