@@ -7,7 +7,17 @@ setuptools.setup(
     name="quicklogic_fasm",
     version="0.0.1",
     packages=setuptools.find_packages(),
+    long_description=long_description,
+    url="https://github.com/antmicro/quicklogic-fasm",
+    author="Antmicro Ltd.",
+    author_email="contact@antmicro.com",
     entry_points={
         'console_scripts': ['qlfasm=quicklogic.qlfasm:main']
-    }
+    },
+    include_package_data=True,
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: Apache Software License",
+        "Operating System :: OS Independent",
+    ],
 )

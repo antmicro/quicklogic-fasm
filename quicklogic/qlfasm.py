@@ -7,6 +7,7 @@ import os
 import errno
 from pathlib import Path
 from fasm_utils.database import Database
+import pkg_resources
 
 
 class QL732BAssembler(fasm_assembler.FasmAssembler):
@@ -160,9 +161,8 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
 
 def main():
 
-    DB_FILES_DIR = os.path.abspath(
-        Path(__file__).resolve().parent/'../ql732b/db/'
-        )
+    DB_FILES_DIR = Path(
+            pkg_resources.resource_filename('quicklogic_fasm', 'ql732b'))
 
     parser = argparse.ArgumentParser(
         description="Converts FASM file to the bitstream or the other way around"
