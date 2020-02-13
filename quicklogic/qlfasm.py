@@ -133,6 +133,9 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
 
 
     def disassemble(self, outfilepath: str, verbose=False):
+        unknown_bits = set([coord for coord, val in self.configbits.items()
+            if bool(val) == True])
+
         features = []
         for feature in self.db:
             for bit in feature.coords:
@@ -142,16 +145,24 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                     break
             else:
                 features.append(feature.signature)
+                unknown_bits -= set([(bit.x, bit.y) for bit in feature.coords])
                 if verbose:
                     print(f'{feature.signature}')
 
         with open(outfilepath, 'w') as fasm_file:
             print(*features, sep='\n', file=fasm_file)
 
+            if len(unknown_bits):
+                for bit in unknown_bits:
+                    print("{{ unknown_bit =  \"{}_{}\"}}".format(bit.x, bit.y),
+                        file=fasm_file)
+
 
 def main():
 
-    DB_FILES_DIR = Path(__file__).resolve().parent/'../ql732b/db/'
+    DB_FILES_DIR = os.path.abspath(
+        Path(__file__).resolve().parent/'../ql732b/db/'
+        )
 
     parser = argparse.ArgumentParser(
         description="Converts FASM file to the bitstream or the other way around"
@@ -167,6 +178,13 @@ def main():
         "outfile",
         type=Path,
         help="The output file (bitstream, or FASM when disassembling)"
+    )
+
+    parser.add_argument(
+        "--db-root",
+        type=str,
+        default=DB_FILES_DIR,
+        help="Path to the fasm database (def. '{}')".format(DB_FILES_DIR)
     )
 
     parser.add_argument(
@@ -191,10 +209,11 @@ def main():
         print("The path to file is not a valid directory")
         exit(errno.ENOTDIR)
 
-    db = Database(DB_FILES_DIR)
-    db.add_table('macro', DB_FILES_DIR / 'macro.db')
-    db.add_table('colclk', DB_FILES_DIR / 'colclk.db')
-    db.add_table('testmacro', DB_FILES_DIR / 'testmacro.db')
+    db = Database(args.db_root)
+    for entry in os.scandir(args.db_root):
+        if entry.is_file() and entry.name.endswith(".db"):
+            basename = os.path.basename(entry.name)
+            db.add_table(basename, entry.path)
 
     assembler = QL732BAssembler(db)
 
