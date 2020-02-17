@@ -155,8 +155,13 @@ class QLDbEntry(DbEntry):
             newsignature = self.signature + \
                 dbentry.signature.replace('.' + self.macrotype, '')
             newspectype = self.celltype
-            if bitname in invertermap[self.macrotype]:
-                info = invertermap[self.macrotype][bitname]
+            keymacrotype = self.macrotype
+            # all macrotypes macro_interface* have the same set of bits
+            if keymacrotype.startswith('macro_interface'):
+                keymacrotype = 'macro_interface'
+            if keymacrotype in invertermap and \
+                    bitname in invertermap[keymacrotype]:
+                info = invertermap[keymacrotype][bitname]
                 part = '{}.{}'.format("ZINV" if info["is_zinv"] else "INV",
                                       info["invertedsignals"])
                 newspectype = info["celltype"]
