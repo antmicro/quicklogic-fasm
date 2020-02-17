@@ -15,9 +15,10 @@ fi
 
 OUTDIR=${1%/}
 
+mkdir -p $OUTDIR
 rm -rf $OUTDIR/*
 
-python3 $SCRIPT "$CSVLOC/DeviceMacroCoord_$DEV.csv" "$OUTDIR/macro.db" \
+python3.7 $SCRIPT "$CSVLOC/DeviceMacroCoord_$DEV.csv" "$OUTDIR/macro.db" \
    --include \
        "$CSVLOC/macroTable_$DEV.csv" \
        "$CSVLOC/macro_clkTable_$DEV.csv" \
@@ -41,5 +42,5 @@ python3 $SCRIPT "$CSVLOC/DeviceMacroCoord_$DEV.csv" "$OUTDIR/macro.db" \
    --techfile "$DEVICEXML" \
    --routing-bits-outfile "$OUTDIR/macro-routing.db"
 
-python3 $SCRIPT "$CSVLOC/ColClk_$DEV.csv" "$OUTDIR/colclk.db"
-python3 $SCRIPT "$CSVLOC/TestMacro_$DEV.csv" "$OUTDIR/testmacro.db"
+python3.7 $SCRIPT "$CSVLOC/ColClk_$DEV.csv" "$OUTDIR/colclk.db"
+python3.7 $SCRIPT "$CSVLOC/TestMacro_$DEV.csv" "$OUTDIR/testmacro.db"
