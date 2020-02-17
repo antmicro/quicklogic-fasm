@@ -45,6 +45,7 @@ class QLDbEntry(DbEntry):
     }
 
     dbentrytemplate = 'X{site[0]}Y{site[1]}.{ctype}.{spectype}.{sig}'
+    dbroutingentrytemplate = 'X{site[0]}Y{site[1]}.ROUTING.{sig}'
 
     def __init__(self,
                  signature: str,
@@ -98,11 +99,16 @@ class QLDbEntry(DbEntry):
         if simplify:
             signature = self._simplify_signature(signature)
 
-        self.signature = self.dbentrytemplate.format(
-                site=self.devicecoord,
-                ctype=self.macrotype_to_celltype[self.macrotype],
-                spectype=self.spectype,
-                sig=signature)
+        if self.is_routing_bit:
+            self.signature = self.dbroutingentrytemplate.format(
+                    site=self.devicecoord,
+                    sig=signature)
+        else:
+            self.signature = self.dbentrytemplate.format(
+                    site=self.devicecoord,
+                    ctype=self.macrotype_to_celltype[self.macrotype],
+                    spectype=self.spectype,
+                    sig=signature)
 
     @classmethod
     def _fix_signature(cls, signature: str):
