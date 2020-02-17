@@ -36,6 +36,10 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
         self.BANKNUMBITS = math.ceil(self.MAXBL / (self.NUMOFBANKS / 2))
 
     def enable_feature(self, fasmline: FasmLine):
+
+        if fasmline.set_feature.value == 0:
+            return
+
         feature = self.db.get_feature(fasmline.set_feature.feature)
 
         if feature is None:
