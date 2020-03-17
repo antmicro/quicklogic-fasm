@@ -10,6 +10,10 @@ from fasm_utils.database import Database
 import pkg_resources
 
 
+DB_FILES_DIR = Path(
+    pkg_resources.resource_filename('quicklogic_fasm', 'ql732b'))
+
+
 class QL732BAssembler(fasm_assembler.FasmAssembler):
 
     def __init__(self, db):
@@ -36,7 +40,6 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
         self.BANKNUMBITS = math.ceil(self.MAXBL / (self.NUMOFBANKS / 2))
 
     def enable_feature(self, fasmline: FasmLine):
-
         if fasmline.set_feature.value == 0:
             return
 
@@ -89,15 +92,16 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
 
                     if val == 1:
                         currval = currval | (1 << banknum)
-                if verbose: print('{}_{}:  {:02X}'.format(wlidx, bitnum, currval))
+                if verbose:
+                    print('{}_{}:  {:02X}'.format(wlidx, bitnum, currval))
                 bitstream.append(currval)
 
-        if verbose: print('Size of bitstream:  {}B'.format(len(bitstream) * 4))
+        if verbose:
+            print('Size of bitstream:  {}B'.format(len(bitstream) * 4))
 
         with open(outfilepath, 'w+b') as output:
             for batch in bitstream:
                 output.write(batch.to_bytes(4, 'little'))
-
 
     def read_bitstream(self, bitfilepath):
         bitstream = []
@@ -105,7 +109,7 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
             while True:
                 bytes = input.read(4)
                 if not bytes:
-                    break;
+                    break
                 bitstream.append(int.from_bytes(bytes, 'little'))
 
         def set_bit(wlidx, wlshift, bitidx, value):
@@ -136,10 +140,9 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                     else:
                         set_bit(wlidx, 0, bitidx, bit)
 
-
     def disassemble(self, outfilepath: str, verbose=False):
         unknown_bits = set([coord for coord, val in self.configbits.items()
-            if bool(val) == True])
+                            if bool(val)])
 
         features = []
         for feature in self.db:
@@ -160,13 +163,30 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
             if len(unknown_bits):
                 for bit in unknown_bits:
                     print("{{ unknown_bit =  \"{}_{}\"}}".format(bit.x, bit.y),
-                        file=fasm_file)
+                          file=fasm_file)
+
+
+def load_quicklogic_database(db_root=DB_FILES_DIR):
+    '''Creates Database object for QuickLogic Fabric.
+
+    Parameters
+    ----------
+    db_root: str
+        A path to directory containing QuickLogic Database files
+
+    Returns
+    -------
+    Database: Database object for QuickLogic
+    '''
+    db = Database(db_root)
+    for entry in os.scandir(db_root):
+        if entry.is_file() and entry.name.endswith(".db"):
+            basename = os.path.basename(entry.name)
+            db.add_table(basename, entry.path)
+    return db
 
 
 def main():
-
-    DB_FILES_DIR = Path(
-            pkg_resources.resource_filename('quicklogic_fasm', 'ql732b'))
 
     parser = argparse.ArgumentParser(
         description="Converts FASM file to the bitstream or the other way around"
@@ -213,11 +233,7 @@ def main():
         print("The path to file is not a valid directory")
         exit(errno.ENOTDIR)
 
-    db = Database(args.db_root)
-    for entry in os.scandir(args.db_root):
-        if entry.is_file() and entry.name.endswith(".db"):
-            basename = os.path.basename(entry.name)
-            db.add_table(basename, entry.path)
+    db = load_quicklogic_database(args.db_root)
 
     assembler = QL732BAssembler(db)
 
@@ -227,6 +243,7 @@ def main():
     else:
         assembler.read_bitstream(args.infile)
         assembler.disassemble(args.outfile, verbose=args.verbose)
+
 
 if __name__ == "__main__":
     main()

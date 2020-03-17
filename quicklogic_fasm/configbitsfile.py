@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import csv
 
+
 class MacroSpecificBit(object):
     '''Represents single entry in macro*Table_*.csv'''
 
@@ -25,7 +26,7 @@ class MacroSpecificBit(object):
         return self.full_bit_name.split('.', 2)[2]
 
     def __repr__(self):
-        args = [f'{k}={repr(v)}' for k,v in self.__dict__.items()]
+        args = [f'{k}={repr(v)}' for k, v in self.__dict__.items()]
         return f'{__class__.__name__}({", ".join(args)})'
 
 
@@ -57,7 +58,7 @@ class DeviceMacroCoord(object):
         self.macro_type = macro_type
 
     def __repr__(self):
-        args = [f'{k}={repr(v)}' for k,v in self.__dict__.items()]
+        args = [f'{k}={repr(v)}' for k, v in self.__dict__.items()]
         return f'{__class__.__name__}({", ".join(args)})'
 
 
@@ -68,4 +69,3 @@ class DeviceMacroCoordsTable(list):
             for line in csv.reader(f):
                 assert len(line) == 6, f'len(line) = {len(line)}; line = {line}'
                 self.append(DeviceMacroCoord(*line))
-

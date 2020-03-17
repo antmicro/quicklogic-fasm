@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import tempfile
-import argparse
 import os
 import random
 from subprocess import call
@@ -17,8 +16,12 @@ args = parser.parse_args()
 MIN_FEATURES = 1
 MAX_FEATURES = 100
 
-DB_FILES_DIR = os.path.join(os.path.dirname(__file__), 'ql732b', 'db')
-QLFASM_PATH = os.path.join(os.path.dirname(__file__), 'quicklogic', 'qlfasm.py')
+DB_FILES_DIR = os.path.join(
+    os.path.dirname(__file__),
+    'quicklogic_fasm',
+    'ql732b')
+QLFASM_PATH = os.path.join(
+    os.path.dirname(__file__), 'quicklogic_fasm', 'qlfasm.py')
 
 print('\rLoading db...\033[K', end='')
 
@@ -50,27 +53,44 @@ def do_test(id):
     disasm_bit_name = os.path.join(tmpdir, f'{id:06d}.disasm.fasm.bit')
 
     num = random.randint(MIN_FEATURES, MAX_FEATURES)
-    random_features = [features[random.randint(0, len(features)-1)] for _ in range(num)]
+    random_features = [
+        features[random.randint(0, len(features) - 1)] for _ in range(num)]
     with open(fasm_name, 'w') as fasm_file:
         print(*random_features, sep='\n', file=fasm_file)
 
     try:
-        call(['/usr/bin/env', 'python3', QLFASM_PATH, fasm_name, bit_name])
-        call(['/usr/bin/env', 'python3', QLFASM_PATH, '-d', bit_name, disasm_fasm_name])
-        call(['/usr/bin/env', 'python3', QLFASM_PATH, disasm_fasm_name, disasm_bit_name])
+        call([
+            '/usr/bin/env', 'python3',
+            QLFASM_PATH, fasm_name, bit_name])
+        call([
+            '/usr/bin/env', 'python3',
+            QLFASM_PATH, '-d', bit_name, disasm_fasm_name])
+        call([
+            '/usr/bin/env', 'python3',
+            QLFASM_PATH, disasm_fasm_name, disasm_bit_name])
 
         success = filecmp.cmp(bit_name, disasm_bit_name, shallow=False)
 
         if args.outdir:
             move_to = 'passed' if success else 'failed'
-            for name in (fasm_name, bit_name, disasm_fasm_name, disasm_bit_name):
+            for name in (
+                    fasm_name,
+                    bit_name,
+                    disasm_fasm_name,
+                    disasm_bit_name):
                 if os.path.exists(name):
-                    os.rename(name, os.path.join(tmpdir, move_to, os.path.basename(name)))
+                    os.rename(
+                        name,
+                        os.path.join(tmpdir, move_to, os.path.basename(name)))
         elif success:
-            for name in (fasm_name, bit_name, disasm_fasm_name, disasm_bit_name):
+            for name in (
+                    fasm_name,
+                    bit_name,
+                    disasm_fasm_name,
+                    disasm_bit_name):
                 if os.path.exists(name):
                     os.remove(name)
-    except:
+    except os.error:
         for name in (fasm_name, bit_name, disasm_fasm_name, disasm_bit_name):
             if os.path.exists(name):
                 os.remove(name)

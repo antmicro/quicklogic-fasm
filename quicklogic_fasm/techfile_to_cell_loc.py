@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import sys
-from collections import namedtuple
 import xml.etree.ElementTree as ET
-from pprint import pprint as pp
 import itertools
 from configbitsfile import MacroSpecificBit
 
@@ -66,17 +64,29 @@ def _cellmatrix2html(cm):
         {slots}
         </body>
     </html>'''
-    slot_template = '<div style="grid-column: {col}; grid-row: {row};">{cells}</div>\n'
-    header_template = '<div class="header" style="grid-column: {col}; grid-row: {row};">{content}</div>\n'
-    cell_template = '<div class="{classes}" title="{description}">{name}</div>'
+    slot_template = '<div style="grid-column: {col}; grid-row: {row};">{cells}</div>\n'  # noqa: E501
+    header_template = '<div class="header" style="grid-column: {col}; grid-row: {row};">{content}</div>\n'  # noqa: E501
+    cell_template = '<div class="{classes}" title="{description}">{name}</div>'  # noqa: E501
 
     slots = []
     for x in range(cm.geometry.width):
-        slots.append(header_template.format(col=x+2, row=1, content=x+cm.geometry.x))
-        slots.append(header_template.format(col=x+2, row=cm.geometry.height+2, content=x+cm.geometry.x))
+        slots.append(header_template.format(
+            col=x + 2,
+            row=1,
+            content=x + cm.geometry.x))
+        slots.append(header_template.format(
+            col=x + 2,
+            row=cm.geometry.height + 2,
+            content=x + cm.geometry.x))
     for y in range(cm.geometry.height):
-        slots.append(header_template.format(row=y+2, col=1, content=y+cm.geometry.y))
-        slots.append(header_template.format(row=y+2, col=cm.geometry.width+2, content=y+cm.geometry.y))
+        slots.append(header_template.format(
+            row=y + 2,
+            col=1,
+            content=y + cm.geometry.y))
+        slots.append(header_template.format(
+            row=y + 2,
+            col=cm.geometry.width + 2,
+            content=y + cm.geometry.y))
 
     for pos in cm.geometry:
         cells = []
@@ -99,12 +109,15 @@ def _cellmatrix2html(cm):
             classes = html.escape(' '.join(classes))
             description = html.escape('\n'.join(description))
 
-            cells.append(cell_template.format(\
-                    name=name, classes=classes, description=description))
-        slots.append(slot_template.format(\
-                cells=' '.join(cells), col=pos.x+2, row=pos.y+2))
+            cells.append(cell_template.format(
+                name=name, classes=classes, description=description))
+        slots.append(slot_template.format(
+            cells=' '.join(cells), col=pos.x + 2, row=pos.y + 2))
     slots = ''.join(slots)
-    print(html_template.format(rows=cm.geometry.height, cols=cm.geometry.width, slots=slots))
+    print(html_template.format(
+        rows=cm.geometry.height,
+        cols=cm.geometry.width,
+        slots=slots))
 
 
 class NumberPair(object):
@@ -117,21 +130,29 @@ class NumberPair(object):
         self._b = int(b)
 
     def __getitem__(self, key):
-        if key == 0: return self._a
-        elif key == 1: return self._b
-        else: raise IndexError()
+        if key == 0:
+            return self._a
+        elif key == 1:
+            return self._b
+        else:
+            raise IndexError()
 
     def __init_subclass__(cls, members):
         cls._members = members
 
     def __getattr__(self, name):
-        if name == self._members[0]: return self._a
-        elif name == self._members[1]: return self._b
+        if name == self._members[0]:
+            return self._a
+        elif name == self._members[1]:
+            return self._b
 
     def __setattr__(self, name, value):
-        if name == self._members[0]: self._a = value
-        elif name == self._members[1]: self._b = value
-        else: super().__setattr__(name, value)
+        if name == self._members[0]:
+            self._a = value
+        elif name == self._members[1]:
+            self._b = value
+        else:
+            super().__setattr__(name, value)
 
     def __add__(self, other):
         return self.__class__(self._a + other._a, self._b + other._b)
@@ -148,8 +169,13 @@ class NumberPair(object):
     def __iter__(self):
         return (self._a, self._b).__iter__()
 
-class Position(NumberPair, members=['x', 'y']): pass
-class Size(NumberPair, members=['width', 'height']): pass
+
+class Position(NumberPair, members=['x', 'y']):
+    pass
+
+
+class Size(NumberPair, members=['width', 'height']):
+    pass
 
 
 class Rectangle(object):
@@ -165,13 +191,18 @@ class Rectangle(object):
             self.size = Size(0, 0)
 
     def __getattr__(self, name):
-        if name in ('x', 'y'): return getattr(self.position, name)
-        if name in ('width', 'height'): return getattr(self.size, name)
+        if name in ('x', 'y'):
+            return getattr(self.position, name)
+        if name in ('width', 'height'):
+            return getattr(self.size, name)
 
     def __setattr__(self, name, value):
-        if name in ('x', 'y'): return setattr(self.position, name, value)
-        if name in ('width', 'height'): return setattr(self.size, name, value)
-        else: super().__setattr__(name, value)
+        if name in ('x', 'y'):
+            return setattr(self.position, name, value)
+        if name in ('width', 'height'):
+            return setattr(self.size, name, value)
+        else:
+            super().__setattr__(name, value)
 
     def __str__(self):
         return f'({self.width}x{self.height} @ ({self.x}, {self.y}))'
@@ -183,13 +214,15 @@ class Rectangle(object):
 
 
 def _spreadsheet_address_to_position(letterNum: str):
-    '''Converts spreadsheet-like address (e.g. "A1") to zero-based [col,row] position'''
+    '''Converts spreadsheet-like address (e.g. "A1") to zero-based [col,row]
+    position.
+    '''
     row = 0
     col = 0
     lettersCount = 0
     for c in letterNum:
         if c.isalpha():
-            col *= 26 # number of letters from A to Z
+            col *= 26  # number of letters from A to Z
             col += ord(c.upper()) - ord('A') + 1
             lettersCount += 1
         else:
@@ -221,17 +254,19 @@ class CellMatrix(object):
     def at_rel(self, x, y):
         assert x < self.geometry.width, f'{x} < {self.geometry.width}'
         assert y < self.geometry.height, f'{y} < {self.geometry.height}'
-        assert len(self._data) > y * self.geometry.width + x, f'{len(self._data)} > {y} * {self.geometry.width} + {x}'
+        assert len(self._data) > y * self.geometry.width + x, \
+            f'{len(self._data)} > {y} * {self.geometry.width} + {x}'
         return self._data[y * self.geometry.width + x]
 
     def at(self, x, y):
         return self.at_rel(x - self.geometry.x, y - self.geometry.y)
 
     def add_cell(self, cell):
-        for x,y in itertools.chain([cell.position], *cell.regions):
+        for x, y in itertools.chain([cell.position], *cell.regions):
             slot = self.at(x, y)
             if cell not in slot:
                 slot.append(cell)
+
 
 class InvPortsInfo(dict):
     '''bit name -> [port name, ...] mapping for single cell type'''
@@ -263,9 +298,9 @@ class InvPortsInfoTable(dict):
 
 def _parse_matrix(matrix):
     attrs = matrix.attrib
-    return Rectangle(\
-            int(attrs['START_COLUMN']), int(attrs['START_ROW']), \
-            int(attrs['COLUMNS']), int(attrs['ROWS']))
+    return Rectangle(
+        int(attrs['START_COLUMN']), int(attrs['START_ROW']),
+        int(attrs['COLUMNS']), int(attrs['ROWS']))
 
 
 class TechFile(object):
@@ -309,7 +344,7 @@ class TechFile(object):
         ce = max(ranges['ColEndNum'] or [cs])
         rs = min(ranges['RowStartNum'] or [0])
         re = max(ranges['RowEndNum'] or [rs])
-        return Rectangle(cs, rs, ce-cs+1, re-rs+1)
+        return Rectangle(cs, rs, ce - cs + 1, re - rs + 1)
 
     def _parse_placement(self):
         cell_groups = self._xml.find('./Placement')
@@ -326,22 +361,25 @@ class TechFile(object):
 
                     exceptions = cg.find('EXCEPTIONS')
                     for e in exceptions:
-                        logic_holes.append(_spreadsheet_address_to_position(e.tag) + logic_geometry.position)
+                        logic_holes.append(_spreadsheet_address_to_position(e.tag) + logic_geometry.position)  # noqa: E501
                         # TODO: handle 'isBlankZone' attr?
 
                     for pos in logic_geometry:
                         if pos not in logic_holes:
-                            self.cells.add_cell(Cell(group='LOGIC', position=pos, type='LOGIC'))
+                            self.cells.add_cell(Cell(
+                                group='LOGIC',
+                                position=pos,
+                                type='LOGIC'))
 
             # Common placement tags
             for c in cg.iter('Cell'):
                 # TODO: add clock attributes?
-                cell = Cell(group=cg.tag, \
-                        position=Position(c.attrib['column'], c.attrib['row']), \
-                        name=c.attrib.get('name', ''), \
-                        io=c.attrib.get('io', ''), \
-                        alias=c.attrib.get('alias', ''), \
-                        type=c.attrib.get('type', ''))
+                cell = (Cell(group=cg.tag,
+                        position=Position(c.attrib['column'], c.attrib['row']),
+                        name=c.attrib.get('name', ''),
+                        io=c.attrib.get('io', ''),
+                        alias=c.attrib.get('alias', ''),
+                        type=c.attrib.get('type', '')))
                 for matrix in c:
                     if matrix.tag.startswith('Matrix'):
                         region = _parse_matrix(matrix)
@@ -353,4 +391,3 @@ if __name__ == '__main__':
     tf = TechFile()
     tf.parse(sys.argv[1])
     _cellmatrix2html(tf.cells)
-

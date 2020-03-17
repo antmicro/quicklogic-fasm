@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 import csv
 import argparse
-from collections import defaultdict, OrderedDict
+from collections import defaultdict
 from fasm_utils.db_entry import DbEntry
 from fasm_utils.segbits import Bit
 from techfile_to_cell_loc import TechFile
-from configbitsfile import MacroSpecificBitsTable, DeviceMacroCoordsTable
 from contextlib import nullcontext
-import re
-
-from pprint import pprint as pp
 
 
 class QLDbEntry(DbEntry):
@@ -56,7 +52,8 @@ class QLDbEntry(DbEntry):
         super().__init__(signature, [Bit(coord[0], coord[1], True)])
         self.devicecoord = devicecoord
         self.macrotype = macrotype
-        self.celltype = None if self.macrotype is None else self.macrotype_to_celltype[self.macrotype]
+        self.celltype = (None if self.macrotype is None
+                         else self.macrotype_to_celltype[self.macrotype])
         self.is_routing_bit = ('street' in signature) or ('highway' in signature)
         self.spectype = spectype
         self.originalsignature = signature
@@ -101,14 +98,14 @@ class QLDbEntry(DbEntry):
 
         if self.is_routing_bit:
             self.signature = self.dbroutingentrytemplate.format(
-                    site=self.devicecoord,
-                    sig=signature)
+                site=self.devicecoord,
+                sig=signature)
         else:
             self.signature = self.dbentrytemplate.format(
-                    site=self.devicecoord,
-                    ctype=self.macrotype_to_celltype[self.macrotype],
-                    spectype=self.spectype,
-                    sig=signature)
+                site=self.devicecoord,
+                ctype=self.macrotype_to_celltype[self.macrotype],
+                spectype=self.spectype,
+                sig=signature)
 
     @classmethod
     def _fix_signature(cls, signature: str):
@@ -129,7 +126,6 @@ class QLDbEntry(DbEntry):
         devicecoord = (int(csvline[1]), int(csvline[0]))
         bitcoord = (int(csvline[3]), int(csvline[4]))
         signature = cls._fix_signature(csvline[2])
-        celltype = cls.macrotype_to_celltype[macrotype]
 
         return cls(signature,
                    bitcoord,
@@ -169,7 +165,7 @@ class QLDbEntry(DbEntry):
                 if newspectype in ['QMUX', 'GMUX']:
                     newsignature += "." + part
                 else:
-                    newsignature  = part
+                    newsignature = part
 
             newcoord = (self.coords[0].x + dbentry.coords[0].x,
                         self.coords[0].y + dbentry.coords[0].y)
@@ -178,7 +174,12 @@ class QLDbEntry(DbEntry):
                  computed ({} {}) limit ({} {})".format(newcoord[0],
                                                         newcoord[1],
                                                         844, 716)
-            newentry = QLDbEntry(newsignature, newcoord, self.devicecoord, self.macrotype, newspectype)
+            newentry = QLDbEntry(
+                newsignature,
+                newcoord,
+                self.devicecoord,
+                self.macrotype,
+                newspectype)
             newentry.update_flattened_signature(True)
             yield newentry
 
@@ -308,15 +309,15 @@ if __name__ == "__main__":
     for celltype in inv_ports_info.keys():
         for invtype in inv_ports_info[celltype]:
             names = [b[0] for b in inv_ports_info[celltype][invtype]]
-            zinv  = [b[1] for b in inv_ports_info[celltype][invtype]]
+            zinv = [b[1] for b in inv_ports_info[celltype][invtype]]
             assert len(set(zinv)) == 1, (names, zinv)
             invertedsignals = '__'.join(names)
             macrotype = invtype.split('.')[1]
             invertername = invtype.replace('.{}.'.format(macrotype), '')
             invertermap[macrotype][invertername] = {
-                    'celltype': celltype,
-                    'invertedsignals': invertedsignals,
-                    'is_zinv': zinv[0]
+                'celltype': celltype,
+                'invertedsignals': invertedsignals,
+                'is_zinv': zinv[0]
             }
 
     coordset = defaultdict(int)
@@ -367,4 +368,3 @@ if __name__ == "__main__":
         max([int(x.split('_')[0]) for x in coordset.keys()])))
     print("Max BL: {}".format(
         max([int(x.split('_')[1]) for x in coordset.keys()])))
-
