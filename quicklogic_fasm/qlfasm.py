@@ -41,6 +41,7 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
 
     def enable_feature(self, fasmline: FasmLine):
         if fasmline.set_feature.value == 0:
+            self._configurebit = False
             return
 
         feature = self.db.get_feature(fasmline.set_feature.feature)
