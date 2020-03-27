@@ -59,7 +59,6 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                 self.clear_config_bit((coord.x, coord.y), fasmline)
 
     def produce_bitstream(self, outfilepath: str, verbose=False):
-
         def get_value_for_coord(wlidx, wlshift, bitidx):
             coord = (wlidx + wlshift, bitidx)
             if coord not in self.configbits:
@@ -105,6 +104,13 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                 output.write(batch.to_bytes(4, 'little'))
 
     def read_bitstream(self, bitfilepath):
+        '''Reads bitstream from file.
+ 
+        Parameters
+        ----------
+        bitfilepath: str
+            A path to the binary file with bitstream
+        '''
         bitstream = []
         with open(bitfilepath, 'rb') as input:
             while True:
@@ -141,7 +147,23 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                     else:
                         set_bit(wlidx, 0, bitidx, bit)
 
-    def disassemble(self, outfilepath: str, verbose=False):
+    def disassemble(self, outfilepath: str = None, verbose=False):
+        '''Converts bitstream to FASM lines.
+
+        This method converts the bits obtained with `read_bitstream` method
+        to FASM lines and returns them. It also can save FASM lines to a file.
+
+        Parameters
+        ----------
+        outfilepath: str
+            An optional path to the output file containing FASM lines
+        verbose: bool
+            If true, the verbose messages will be printed in stdout
+
+        Returns
+        -------
+        list: A list of FASM lines
+        '''
         unknown_bits = set([coord for coord, val in self.configbits.items()
                             if bool(val)])
 
@@ -158,13 +180,15 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                 if verbose:
                     print(f'{feature.signature}')
 
-        with open(outfilepath, 'w') as fasm_file:
-            print(*features, sep='\n', file=fasm_file)
+        if outfilepath is not None:
+            with open(outfilepath, 'w') as fasm_file:
+                print(*features, sep='\n', file=fasm_file)
 
-            if len(unknown_bits):
-                for bit in unknown_bits:
-                    print("{{ unknown_bit =  \"{}_{}\"}}".format(bit.x, bit.y),
-                          file=fasm_file)
+                if len(unknown_bits):
+                    for bit in unknown_bits:
+                        print(f'{{ unknown_bit =  "{bit.x}_{bit.y}"}}',
+                              file=fasm_file)
+        return features
 
 
 def load_quicklogic_database(db_root=DB_FILES_DIR):
