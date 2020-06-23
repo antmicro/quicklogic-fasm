@@ -40,8 +40,83 @@ class QLDbEntry(DbEntry):
         'macro_interface_top_right': 'INTERFACE'
     }
 
+    # A map of grid row coordinates to bit WL ranges.
+    # Taken from QL732B_cdl.cmd
+    wl_map = {
+        1: (1, 28,),
+        2: (29, 56,),
+        3: (57, 84,),
+        4: (85, 112,),
+        5: (113, 140,),
+        6: (141, 168,),
+        7: (169, 196,),
+        8: (197, 224,),
+        9: (225, 252,),
+        10: (253, 281,),
+        11: (282, 309,),
+        12: (310, 337,),
+        13: (338, 365,),
+        14: (366, 393,),
+        15: (394, 421,),
+        16: (422, 449,),
+        17: (450, 477,),
+        18: (478, 505,),
+        19: (506, 533,),
+        20: (534, 561,),
+        21: (562, 589,),
+        22: (590, 617,),
+        23: (618, 645,),
+        24: (646, 674,),
+        25: (675, 702,),
+        26: (703, 730,),
+        27: (731, 758,),
+        28: (759, 786,),
+        29: (787, 814,),
+        30: (815, 842,),
+    }
+
+    # A map of grid col coortinates to bit BL ranges
+    # Taken from QL732B_cdl.cmd
+    bl_map = {
+        0: (1, 21,),
+        1: (22, 42,),
+        2: (43, 63,),
+        3: (64, 84,),
+        4: (85, 105,),
+        5: (106, 126,),
+        6: (127, 147,),
+        7: (148, 168,),
+        8: (169, 189,),
+        9: (190, 210,),
+        10: (211, 231,),
+        11: (232, 252,),
+        12: (253, 273,),
+        13: (274, 294,),
+        14: (295, 315,),
+        15: (316, 336,),
+        16: (337, 357,),
+        17: (358, 378,),
+        18: (379, 399,),
+        19: (400, 420,),
+        20: (421, 441,),
+        21: (442, 462,),
+        22: (463, 483,),
+        23: (484, 504,),
+        24: (505, 525,),
+        25: (526, 546,),
+        26: (547, 567,),
+        27: (568, 588,),
+        28: (589, 609,),
+        29: (610, 630,),
+        30: (631, 651,),
+        31: (652, 672,),
+        32: (673, 693,),
+        33: (694, 714,),
+    }
+
     dbentrytemplate = 'X{site[0]}Y{site[1]}.{ctype}.{spectype}.{sig}'
     dbroutingentrytemplate = 'X{site[0]}Y{site[1]}.ROUTING.{sig}'
+    dbcolclkentrytemplate = 'X{site[0]}Y{site[1]}.CAND{idx}.{sig}'
 
     def __init__(self,
                  signature: str,
@@ -50,20 +125,21 @@ class QLDbEntry(DbEntry):
                  macrotype=None,
                  spectype=None):
         super().__init__(signature, [Bit(coord[0], coord[1], True)])
+        self.coord = coord
         self.devicecoord = devicecoord
         self.macrotype = macrotype
         self.celltype = (None if self.macrotype is None
                          else self.macrotype_to_celltype[self.macrotype])
         self.is_routing_bit = ('street' in signature) or ('highway' in signature)
+        self.is_colclk_bit = ('I_hilojoint' in signature) or ('I_enjoint' in signature)
         self.spectype = spectype
         self.originalsignature = signature
 
-    @staticmethod
-    def _simplify_signature(signature):
+    def simplify_signature(self):
         '''Simplifies the signature by removing redundant / not relevant
         information from it'''
 
-        parts = signature.split(".")
+        parts = self.signature.split(".")
 
         # Remove "Ipsm" and "I_jcb" from the signature
         for word in ["Ipsm", "I_jcb"]:
@@ -83,29 +159,98 @@ class QLDbEntry(DbEntry):
                 parts = parts[idx:]
                 break
 
-        signature = ".".join(parts)
-        return signature
+        # Remove everything before these:
+        for word in ["I_hilojoint", "I_enjoint"]:
+            if word in parts:
+                idx = parts.index(word)
+                parts = parts[idx:]
 
-    def update_flattened_signature(self, simplify=False):
+        self.signature = ".".join(parts)
+
+    @staticmethod
+    def _get_grid_coord(wl, bl):
+        """
+        Returns the device grid position as (col, row) of the a bit with the
+        given wl and bl indices.
+        """
+        row = None
+        col = None
+
+        for i, (l, h) in QLDbEntry.wl_map.items():
+            if wl >= l and wl <= h:
+                row = i
+                break
+
+        for i, (l, h) in QLDbEntry.bl_map.items():
+            if bl >= l and bl <= h:
+                col = i
+                break
+
+        return col, row
+
+    @staticmethod
+    def _get_cand_index(signature):
+        """
+        Extracts index of the CAND cell from the macro name
+        """
+
+        # This map translates between the last "I<n>" field value and the
+        # actual CAND cell index.
+        INDEX_MAP = {
+            10: 0,
+            9: 1,
+            8: 2,
+            7: 3,
+            6: 4,
+        }
+
+        # Split the signature
+        parts = signature.split(".")
+
+        # Get the last "I<n>" field
+        for i, word in enumerate(parts):
+            if word in ["I_hilojoint", "I_enjoint"]:
+                part = parts[i-1]
+                break
+        else:
+            assert False, signature
+
+        # Decode the index
+        idx = int(part[1:])
+
+        # Remap the index
+        assert idx in INDEX_MAP, (signature, idx)
+        return INDEX_MAP[idx]
+
+    def update_signature(self, simplify=False):
         '''Updates the signature for flattened entry so it follows the format
         introduced in `dbentrytemplate`.
         '''
 
-        signature = self.originalsignature
-
-        if simplify:
-            signature = self._simplify_signature(signature)
+        self.signature = self.originalsignature
 
         if self.is_routing_bit:
+            self.simplify_signature()
             self.signature = self.dbroutingentrytemplate.format(
                 site=self.devicecoord,
-                sig=signature)
-        else:
+                sig=self.signature)
+
+        elif self.is_colclk_bit:
+            self.simplify_signature()
+            site = self._get_grid_coord(self.coord[0], self.coord[1])
+            cand = self._get_cand_index(self.originalsignature)
+            self.signature = self.dbcolclkentrytemplate.format(
+                site=site,
+                idx=cand,
+                sig=self.signature)
+
+        elif self.macrotype is not None:
+            self.simplify_signature()
             self.signature = self.dbentrytemplate.format(
                 site=self.devicecoord,
                 ctype=self.macrotype_to_celltype[self.macrotype],
                 spectype=self.spectype,
-                sig=signature)
+                sig=self.signature)
 
     @classmethod
     def _fix_signature(cls, signature: str):
@@ -180,7 +325,7 @@ class QLDbEntry(DbEntry):
                 self.devicecoord,
                 self.macrotype,
                 newspectype)
-            newentry.update_flattened_signature(True)
+            newentry.update_signature(True)
             yield newentry
 
 
@@ -269,6 +414,10 @@ if __name__ == "__main__":
     if not args.include:
         csvdata = process_csv_data(args.infile)
         dbdata = convert_to_db(csvdata)
+
+        for entry in dbdata:
+            entry.update_signature(True)
+
         with open(args.outfile, 'w') as output:
             output.writelines([str(d) for d in dbdata])
         exit(0)
