@@ -41,7 +41,7 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
 
     def enable_feature(self, fasmline: FasmLine):
         if fasmline.set_feature.value == 0:
-            self._configurebit = False
+            self._configuredbit = False
             return
 
         feature = self.db.get_feature(fasmline.set_feature.feature)
@@ -57,6 +57,11 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
                 self.set_config_bit((coord.x, coord.y), fasmline)
             else:
                 self.clear_config_bit((coord.x, coord.y), fasmline)
+
+        # TODO: Remove the "configuredbit" test. Not only that it does not have
+        # much sense, it also disallows duplicated fasm features in the input
+        # file.
+        self._configuredbit = True
 
     def produce_bitstream(self, outfilepath: str, verbose=False):
         def get_value_for_coord(wlidx, wlshift, bitidx):
