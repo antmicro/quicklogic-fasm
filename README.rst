@@ -31,6 +31,13 @@ To create a JLink file that can be used to flash the FPGA (i.e. for Chandalar bo
 
     python -m quicklogic_fasm.bitstream_to_jlink <input.bin> <output.jlink>
 
+Generating OpenOCD script for Quicklogic bitstream
+------------------------------------------------
+
+To create an OpenOCD file that can be used to flash the FPGA, you need to run::
+
+    python -m quicklogic_fasm.bitstream_to_openocd <input.bin> <output.cfg>
+
 Generating Symbiflow Database (db) files from `EOS-S3 <https://github.com/QuickLogic-Corp/EOS-S3>`_ CSV files
 -------------------------------------------------------------------------------------------------------------
 
