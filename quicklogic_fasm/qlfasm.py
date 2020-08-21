@@ -41,10 +41,9 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
         self.memdict = dict()
         self.membaseaddress = {'X18Y30' : '0x4001b000', 'X1Y30' : '0x4001a000', 'X33Y2' : '0x40018000', 'X33Y16' : '0x40019000'}
 
-    def produce_mem(self, fasmline: FasmLine):
+    def populate_meminit(self, fasmline: FasmLine):
         featurevalue = fasmline.set_feature.value
         baseaddress = int (self.membaseaddress[fasmline.set_feature.feature[:-13]], 16)
-        print (baseaddress)
         for i in range(0, (fasmline.set_feature.end -fasmline.set_feature.start) //18 + 1):
            value = featurevalue & 262143
            featurevalue = featurevalue >> 18
@@ -58,23 +57,9 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
 
         feature = self.db.get_feature(fasmline.set_feature.feature)
         if feature is None and "RAM.RAM.INIT" in fasmline.set_feature.feature:
-            self.produce_mem(fasmline)
-            #featurevalue = fasmline.set_feature.value
-            #for i in range(0, (fasmline.set_feature.end -fasmline.set_feature.start) //18 + 1):
-               #value = featurevalue & 262143
-               #featurevalue = featurevalue >> 18
-               #self.memdict[i] = value;
+            self.populate_meminit(fasmline)
             self._configuredbit = True
             return
-
-        #print (feature)
-        #print (fasmline.set_feature.feature)
-        #print (fasmline.set_feature.value)
-        #print (fasmline.set_feature.value_format)
-        #print (fasmline.set_feature.start)
-        #print (fasmline.set_feature.end)
-        
-        #print("binary is {0:>08b}".format(fasmline.set_feature.featurevalue))
 
         if feature is None:
             raise fasm_assembler.FasmLookupError(
