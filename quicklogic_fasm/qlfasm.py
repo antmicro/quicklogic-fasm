@@ -38,6 +38,18 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
         self.NUMOFBANKS = 32
 
         self.BANKNUMBITS = math.ceil(self.MAXBL / (self.NUMOFBANKS / 2))
+        self.memdict = dict()
+        self.membaseaddress = {'X18Y30' : '0x4001b000', 'X1Y30' : '0x4001a000', 'X33Y2' : '0x40018000', 'X33Y16' : '0x40019000'}
+
+    def produce_mem(self, fasmline: FasmLine):
+        featurevalue = fasmline.set_feature.value
+        baseaddress = int (self.membaseaddress[fasmline.set_feature.feature[:-13]], 16)
+        print (baseaddress)
+        for i in range(0, (fasmline.set_feature.end -fasmline.set_feature.start) //18 + 1):
+           value = featurevalue & 262143
+           featurevalue = featurevalue >> 18
+           self.memdict[baseaddress+i*4] = value;
+    
 
     def enable_feature(self, fasmline: FasmLine):
         if fasmline.set_feature.value == 0:
@@ -45,6 +57,24 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
             return
 
         feature = self.db.get_feature(fasmline.set_feature.feature)
+        if feature is None and "RAM.RAM.INIT" in fasmline.set_feature.feature:
+            self.produce_mem(fasmline)
+            #featurevalue = fasmline.set_feature.value
+            #for i in range(0, (fasmline.set_feature.end -fasmline.set_feature.start) //18 + 1):
+               #value = featurevalue & 262143
+               #featurevalue = featurevalue >> 18
+               #self.memdict[i] = value;
+            self._configuredbit = True
+            return
+
+        #print (feature)
+        #print (fasmline.set_feature.feature)
+        #print (fasmline.set_feature.value)
+        #print (fasmline.set_feature.value_format)
+        #print (fasmline.set_feature.start)
+        #print (fasmline.set_feature.end)
+        
+        #print("binary is {0:>08b}".format(fasmline.set_feature.featurevalue))
 
         if feature is None:
             raise fasm_assembler.FasmLookupError(
@@ -107,6 +137,10 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
         with open(outfilepath, 'w+b') as output:
             for batch in bitstream:
                 output.write(batch.to_bytes(4, 'little'))
+        
+        with open(Path(outfilepath.parent).joinpath("ram.mem"), 'w') as output:
+            for x,y in self.memdict.items():
+                output.write("0x{:08x}:0x{:08x}\n".format(x,y))
 
     def read_bitstream(self, bitfilepath):
         '''Reads bitstream from file.
