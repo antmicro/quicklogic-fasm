@@ -38,6 +38,9 @@ jlink_footer = [
 header = "uint32_t	axFPGABitStream[] = {\n\t "
 footer = "\n\n};\n"
 
+memheader = "uint32_t	axFPGAMemInit[] = {\n\t "
+memfooter = "\n\n};\n"
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Converts QuickLogic JLINK script to Header file"
@@ -80,6 +83,56 @@ if __name__ == '__main__':
             headerdata += ", "
     
     data = headerdata[:-4]
+    data += footer
+
+   # with open(args.outfile, 'w') as headerfile:
+    #    headerfile.write(data)
+    
+    line_parser = re.compile(r'^\s*w4 (?P<addr>0x4001[89ab])[xX0-9a-f]+,\s*(?P<data>[xX0-9a-f]+).*')
+
+    fp = open(args.infile, 'r') 
+    file_data = fp.readlines()
+
+    counter = 0
+    wordcount = 0
+    headerdata = memheader
+    #headerdata  += "{"
+    prev_addr = None
+    curr_headerdata = ""
+  
+    for line in file_data:
+        linematch = line_parser.match(line)
+        if linematch:
+            curr_addr = linematch.group('addr')
+            curr_data = linematch.group('data')
+        else:    
+            continue
+        
+        if prev_addr is not None and  (prev_addr != curr_addr):
+            #curr_headerdata += "}\n" 
+            headerdata += prev_addr + "000," + hex(wordcount) + "," + curr_headerdata
+            prev_addr = curr_addr
+            wordcount = 0
+            counter = 0
+            curr_headerdata = ""
+            #continue;
+
+        prev_addr = curr_addr
+        curr_headerdata += curr_data
+        
+        counter += 1
+        wordcount += 1 
+        if counter is 10:
+            curr_headerdata += ",\n\t "
+            counter = 0
+        else:
+            curr_headerdata += ", "
+           
+ 
+    headerdata += curr_addr + "000," + hex(wordcount) + "," + curr_headerdata
+    data += headerdata[:-2]
+    #data += "},\n"
+
     data += footer
 
     with open(args.outfile, 'w') as headerfile:

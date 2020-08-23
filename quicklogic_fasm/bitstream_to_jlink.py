@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+import re
 
 header = [
     'w4 0x40004c4c 0x00000180',
@@ -17,6 +18,20 @@ header = [
     'sleep 100',
 ]
 
+apbconfigon = [
+    'sleep 100',
+    'w4 0x40014000 0x00000000',
+    'sleep 100',
+    'w4 0x40000300 0x00000001',
+    'sleep 100',
+]
+
+apbconfigoff = [
+    'sleep 100',
+    'w4 0x40000300 0x00000000',
+    'sleep 100',
+]
+ 
 footer = [
     'sleep 100',
     'w4 0x40014000 0x00000000',
@@ -64,7 +79,35 @@ if __name__ == '__main__':
             line = 'w4 0x40014ffc, 0x{:08x}'.format(bitword)
             jlinkscript.append(line)
 
-    jlinkscript.extend(footer)
+    #jlinkscript.extend(footer)
 
+    #with open(args.outfile, 'w') as jlink:
+    #    jlink.write('\n'.join(jlinkscript))
+
+    line_parser = re.compile(r'(?P<addr>[xX0-9a-f]+).*:(?P<data>[xX0-9a-f]+).*')
+
+    fp = open(Path(args.infile.parent).joinpath("ram.mem"), 'r') 
+    file_data = fp.readlines()
+
+    counter = 0
+    headerdata = header
+    for line in file_data:
+        linematch = line_parser.match(line)
+        if linematch:
+            if (counter == 0):
+                jlinkscript.extend(apbconfigon)
+            curr_data = linematch.group('data')
+            curr_addr = linematch.group('addr')
+            line = 'w4 {}, {}'.format(curr_addr, curr_data)
+            jlinkscript.append(line)
+            counter += 1
+        else:    
+            continue
+
+    if (counter != 0):
+        jlinkscript.extend(apbconfigoff)
+
+    jlinkscript.extend(footer)
+    
     with open(args.outfile, 'w') as jlink:
         jlink.write('\n'.join(jlinkscript))
