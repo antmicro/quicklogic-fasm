@@ -85,9 +85,6 @@ if __name__ == '__main__':
     data = headerdata[:-4]
     data += footer
 
-   # with open(args.outfile, 'w') as headerfile:
-    #    headerfile.write(data)
-    
     line_parser = re.compile(r'^\s*w4 (?P<addr>0x4001[89ab])[xX0-9a-f]+,\s*(?P<data>[xX0-9a-f]+).*')
 
     fp = open(args.infile, 'r') 
@@ -96,9 +93,9 @@ if __name__ == '__main__':
     counter = 0
     wordcount = 0
     headerdata = memheader
-    #headerdata  += "{"
     prev_addr = None
     curr_headerdata = ""
+    curr_addr = ""
   
     for line in file_data:
         linematch = line_parser.match(line)
@@ -109,13 +106,11 @@ if __name__ == '__main__':
             continue
         
         if prev_addr is not None and  (prev_addr != curr_addr):
-            #curr_headerdata += "}\n" 
-            headerdata += prev_addr + "000," + hex(wordcount) + "," + curr_headerdata
+            headerdata += prev_addr + "000, " + hex(wordcount) + ",\n\t " + curr_headerdata + "\n\t "
             prev_addr = curr_addr
             wordcount = 0
             counter = 0
             curr_headerdata = ""
-            #continue;
 
         prev_addr = curr_addr
         curr_headerdata += curr_data
@@ -128,10 +123,10 @@ if __name__ == '__main__':
         else:
             curr_headerdata += ", "
            
+    if (wordcount != 0):
+        headerdata += prev_addr + "000, " + hex(wordcount) + ",\n\t " + curr_headerdata
  
-    headerdata += curr_addr + "000," + hex(wordcount) + "," + curr_headerdata
     data += headerdata[:-2]
-    #data += "},\n"
 
     data += footer
 
