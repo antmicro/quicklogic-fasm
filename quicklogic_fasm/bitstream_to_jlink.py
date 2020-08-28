@@ -79,11 +79,6 @@ if __name__ == '__main__':
             line = 'w4 0x40014ffc, 0x{:08x}'.format(bitword)
             jlinkscript.append(line)
 
-    #jlinkscript.extend(footer)
-
-    #with open(args.outfile, 'w') as jlink:
-    #    jlink.write('\n'.join(jlinkscript))
-
     line_parser = re.compile(r'(?P<addr>[xX0-9a-f]+).*:(?P<data>[xX0-9a-f]+).*')
 
     fp = open(Path(args.infile.parent).joinpath("ram.mem"), 'r') 
