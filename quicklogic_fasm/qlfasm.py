@@ -44,7 +44,7 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
     def populate_meminit(self, fasmline: FasmLine):
         featurevalue = fasmline.set_feature.value
         baseaddress = int (self.membaseaddress[fasmline.set_feature.feature[:-13]], 16)
-        for i in range(0, (fasmline.set_feature.end -fasmline.set_feature.start) //18 + 1):
+        for i in range(fasmline.set_feature.start //18, (fasmline.set_feature.end + 1) //18):
            value = featurevalue & 262143
            featurevalue = featurevalue >> 18
            self.memdict[baseaddress+i*4] = value;
