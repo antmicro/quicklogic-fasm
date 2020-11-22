@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+import re
 import json
 
 
@@ -19,6 +20,20 @@ header = [
     '    mww 0x40004054 0x00000001',
     '    sleep 100',
     '    mww 0x40014000 0x0000bdff',
+    '    sleep 100',
+]
+
+apbconfigon = [
+    '    sleep 100',
+    '    mww 0x40014000 0x00000000',
+    '    sleep 100',
+    '    mww 0x40000300 0x00000001',
+    '    sleep 100',
+]
+
+apbconfigoff = [
+    '    sleep 100',
+    '    mww 0x40000300 0x00000000',
     '    sleep 100',
 ]
 
@@ -103,8 +118,13 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    openocd_script = header
 
+    ##################### OPENOCD HEADER #####################
+    openocd_script = header
+    ##########################################################
+
+
+    ############# BITSTREAM OPENOCD SCRIPT #####################
     with open(args.infile, 'rb') as bitstream:
         while True:
             data = bitstream.read(4)
@@ -113,12 +133,56 @@ if __name__ == '__main__':
             bitword = int.from_bytes(data, 'little')
             line = '    mww 0x40014ffc 0x{:08x}'.format(bitword)
             openocd_script.append(line)
+    #############################################################
 
+
+    ############# MEMINIT OPENOCD SCRIPT #################
+    line_parser = re.compile(r'(?P<addr>[xX0-9a-f]+).*:(?P<data>[xX0-9a-f]+).*')
+
+    fp = open(Path(args.infile.parent).joinpath("ram.mem"), 'r') 
+    file_data = fp.readlines()
+
+    counter = 0
+    headerdata = header
+    for line in file_data:
+        linematch = line_parser.match(line)
+        if linematch:
+            if (counter == 0):
+                openocd_script.extend(apbconfigon)
+            curr_data = linematch.group('data')
+            curr_addr = linematch.group('addr')
+            line = '    mww {} {}'.format(curr_addr, curr_data)
+            openocd_script.append(line)
+            counter += 1
+        else:    
+            continue
+
+    if (counter != 0):
+        openocd_script.extend(apbconfigoff)
+    ######################################################
+
+
+    ##################### OPENOCD FOOTER #######################
     openocd_script.extend(footer)
     openocd_script.extend(gen_osc_setting(args.osc_freq))
     openocd_script.extend(gen_clk_divider_setting(args.fpga_clk_divider))
+    ##########################################################
 
+
+    ############# IOMUX OPENOCD SCRIPT #################
+    # if bitstream file == NAME.bit, then the iomux openocd script will be generated as:
+    # NAME_iomux.openocd, use this to locate the iomux binary
+    iomuxopenocd_file = Path(args.infile.parent).joinpath(args.infile.stem + "_iomux.openocd")
+
+    with open(iomuxopenocd_file, 'r') as iomuxopenocd:
+        iomux_lines = iomuxopenocd.readlines()
+        for line in iomux_lines:
+            openocd_script.append(line.rstrip()) 
+    ####################################################
+
+
+    ############# FINAL OPENOCD FILE #################
     openocd_script = gen_openocd_proc(openocd_script)
-
     with open(args.outfile, 'w') as openocd:
         openocd.write('\n'.join(openocd_script))
+    ##################################################
