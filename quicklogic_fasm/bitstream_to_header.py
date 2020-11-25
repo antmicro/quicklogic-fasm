@@ -4,8 +4,10 @@ import re
 
 header = "uint32_t	axFPGABitStream[] = {\n\t"
 footer = "\n};\n"
-memheader = "uint32_t   axFPGAMemInit[] = {\n\t "
+memheader = "uint32_t   axFPGAMemInit[] = {\n\t"
 memfooter = "\n\n};\n"
+iomuxheader = "uint32_t   axFPGAIOMuxInit[] = {\n\t"
+iomuxfooter = "\n};\n"
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Converts QuickLogic bitstream to header script"
@@ -25,6 +27,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    ############# BITSTREAM ARRAY #################
     headerscript = header
 
     with open(args.infile, 'rb') as bitstream:
@@ -42,11 +45,15 @@ if __name__ == '__main__':
                 headerscript += line 
                 counter += 1
     
-    data = headerscript[:-3]
+    # last line will have ', \n\t' so remove these 4 characters!
+    data = headerscript[:-4]
     data += footer
+    #############################################
 
+    ############# MEMINIT ARRAY ################# 
     line_parser = re.compile(r'(?P<addr>0x4001[89ab])[xX0-9a-f]+:(?P<data>[xX0-9a-f]+).*')
 
+    # RAM initialization is always generated as ram.mem
     fp = open(Path(args.infile.parent).joinpath("ram.mem"), 'r')
     file_data = fp.readlines()
 
@@ -90,7 +97,40 @@ if __name__ == '__main__':
  
     data += headerdata[:-2]
     data += footer
+    ###########################################
+    
+    ############# IOMUX ARRAY ################# 
+    iomuxdata = iomuxheader
 
+    # if bitstream file == NAME.bit, then the iomux binary will be generated as:
+    # NAME_iomux.bin, use this to locate the iomux binary
+    iomuxbin_file = Path(args.infile.parent).joinpath(args.infile.stem + "_iomux.bin")
+
+    with open(iomuxbin_file, 'rb') as iomuxbin:
+        counter = 1
+        while True:
+            regaddr = iomuxbin.read(4)
+            if not regaddr:
+                break
+            regval = iomuxbin.read(4)
+            if not regval:
+                break
+            regaddrword = int.from_bytes(regaddr, 'little')
+            regvalword = int.from_bytes(regval, 'little')
+            line = '0x{:08x}, 0x{:08x},\n\t'.format(regaddrword,regvalword)
+            iomuxdata += line
+
+        # at the end we will have the last line with ,\n\t remove 3 chars
+        iomuxdata = iomuxdata[:-3]
+        # add the footer
+        iomuxdata += iomuxfooter
+
+    # add the iomux data into the main file:
+    data += iomuxdata
+    ###########################################
+
+    
+    ############# FINAL HEADER FILE #################
     with open(args.outfile, 'w') as headerfile:
         headerfile.write(data)
-
+    #################################################

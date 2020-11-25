@@ -68,8 +68,12 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    jlinkscript = header
 
+    ##################### JLINK HEADER #######################
+    jlinkscript = header
+    ##########################################################
+
+    ############# BITSTREAM JLINK SCRIPT #####################
     with open(args.infile, 'rb') as bitstream:
         while True:
             data = bitstream.read(4)
@@ -78,7 +82,9 @@ if __name__ == '__main__':
             bitword = int.from_bytes(data, 'little')
             line = 'w4 0x40014ffc, 0x{:08x}'.format(bitword)
             jlinkscript.append(line)
+    ##########################################################
 
+    ######################### MEMINIT JLINK SCRIPT ###########################
     line_parser = re.compile(r'(?P<addr>[xX0-9a-f]+).*:(?P<data>[xX0-9a-f]+).*')
 
     fp = open(Path(args.infile.parent).joinpath("ram.mem"), 'r') 
@@ -101,8 +107,24 @@ if __name__ == '__main__':
 
     if (counter != 0):
         jlinkscript.extend(apbconfigoff)
+    ##############################################################################
 
+    ##################### JLINK FOOTER #######################
     jlinkscript.extend(footer)
+    ##########################################################
+
+    ############# IOMUX JLINK SCRIPT ###################
+    # if bitstream file == NAME.bit, then the iomux jlink script will be generated as:
+    # NAME_iomux.jlink, use this to locate the iomux binary
+    iomuxjlink_file = Path(args.infile.parent).joinpath(args.infile.stem + "_iomux.jlink")
+
+    with open(iomuxjlink_file, 'r') as iomuxjlink:
+        iomux_lines = iomuxjlink.readlines()
+        for line in iomux_lines:
+            jlinkscript.append(line.rstrip())
+    ####################################################
     
+    ################ FINAL JLINK FILE #################
     with open(args.outfile, 'w') as jlink:
         jlink.write('\n'.join(jlinkscript))
+    ###################################################
