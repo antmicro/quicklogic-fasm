@@ -86,7 +86,6 @@ if __name__ == '__main__':
         if linematch:
             curr_addr = linematch.group('addr')
             curr_data = linematch.group('data')
-            #print(curr_addr, curr_data)
         else:
             continue
 
@@ -112,8 +111,6 @@ if __name__ == '__main__':
         if prev_addr != curr_addr:
             # we are going to start a new block
             # save the block_start_address, memory wordcount, followed by the current block memory words
-            #print("current_block_start_addr", current_block_start_addr)
-            #print("wordcount", wordcount)
 
             mem_init_bin_bytearray.extend(int(current_block_start_addr, 16).to_bytes(4, "little"))
             mem_init_bin_bytearray.extend(int(wordcount).to_bytes(4, "little"))
@@ -135,8 +132,6 @@ if __name__ == '__main__':
 
     # at the end of the loop, the last memory block remains to be saved:
     if (wordcount != 0):
-        #print("current_block_start_addr", current_block_start_addr)
-        #print("wordcount", wordcount)
         mem_init_bin_bytearray.extend(int(current_block_start_addr, 16).to_bytes(4, "little"))
         mem_init_bin_bytearray.extend(int(wordcount).to_bytes(4, "little"))
         mem_init_bin_bytearray.extend(current_block_memory_words) 
@@ -144,7 +139,6 @@ if __name__ == '__main__':
     meminit_size = len(mem_init_bin_bytearray)
     # 1024 words x 4B x 4 blocks + 2 words x 4B x 4 blocks (1024 -> mem, 2 -> addr,count)
     #expected_meminit_size = (1024 * 4 * 4) + (2 * 4 * 4)
-    #print(meminit_size, expected_meminit_size)
 
     # add to the fpga binary
     fpga_bin_content_byte_array.extend(mem_init_bin_bytearray)
@@ -176,11 +170,6 @@ if __name__ == '__main__':
     ##########################################
     
     ############# FINAL FPGA BIN #################
-    print("fpga_bin_header_size", len(fpga_bin_header_byte_array))
-    print("bitstream_size", bitstream_size)
-    print("meminit_size", meminit_size)
-    print("iomux_size", iomux_size)
-    #print(fpga_bin_header_byte_array.hex())
     with open(args.outfile, 'wb') as fpgabin:
         # write the header bytes
         fpgabin.write(fpga_bin_header_byte_array)
