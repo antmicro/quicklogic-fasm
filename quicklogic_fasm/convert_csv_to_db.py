@@ -328,6 +328,88 @@ class QLDbEntry(DbEntry):
             newentry.update_signature(True)
             yield newentry
 
+def identify_exclusive_feature_groups(entries):
+    """
+    Identifies exclusive FASM features and creates groups of them. Returns a
+    dict indexed by group names containing sets of the features.
+    """
+
+    groups = {}
+
+    # Scan entries, form groups
+    for entry in entries:
+
+        # Get the feature and split it into fields
+        feature = entry.signature
+        parts = feature.split(".")
+
+        # Check if this feature may be a part of a group.
+        # This is EOS-S3 specific. Each routing mux is encoded as one-hot.
+        # A mux feature has "I_pg<n>" suffix.
+        if parts[1] == "ROUTING" and parts[-1].startswith("I_pg"):
+
+            # Create a group
+            group = ".".join(parts[:-1])
+            if group not in groups:
+                groups[group] = set()
+
+            # Add the feature to the group
+            groups[group].add(feature)
+
+    return groups
+
+
+def group_entries(entries, groups):
+    """
+    Groups exclusive features together by identifying all bits that are common
+    to each group and then making each feature clear them. Leave bits that are
+    set intact.
+    """
+
+    # Index entries by their signatures
+    entries = {e.signature: e for e in entries}
+
+    # Identify zero bits for each group
+    zero_bits = {}
+    for group, features in groups.items():
+
+        # Collect bits
+        bits = set()
+        for feature in features:
+            for bit in entries[feature].coords:
+                bits.add(Bit(x=bit.x, y=bit.y, isset=False))
+
+        # Store bits
+        zero_bits[group] = bits
+
+    # Group entries by adding zero-bits to them
+    for group, features in groups.items():
+        bits = zero_bits[group]
+
+        for feature in features:
+            entry = entries[feature]
+
+            # Append zero bits
+            for bit in bits:
+
+                # Do not add the bit cleared if it is set
+                key = Bit(x=bit.x, y=bit.y, isset=True)
+                if key in entry.coords:
+                    continue
+
+                # Do not add it if it is already cleared
+                if bit in entry.coords:
+                    continue
+
+                # Add the cleared bit
+                entry.coords.append(bit)
+
+            # Sort bits
+            entry.coords.sort(key=lambda bit: (bit.x, bit.y))
+
+    # Return entries as a list
+    return list(entries.values())
+
 
 def process_csv_data(inputfile: str):
     '''Converts the CSV file to corresponding CSV line tuples.
@@ -485,6 +567,11 @@ if __name__ == "__main__":
                     macrolibrary[dbentry.macrotype], invertermap):
                 flattenedlibrary.append(flattenedentry)
 
+    # Identify exclusive feature groups
+    groups = identify_exclusive_feature_groups(flattenedlibrary)
+    # Group entries
+    flattenedlibrary = group_entries(flattenedlibrary, groups)
+
     # Save the final database and perform sanity checks
     with open(args.outfile, 'w') as output:
         with (open(args.routing_bits_outfile, 'w')
@@ -494,8 +581,9 @@ if __name__ == "__main__":
                     routingoutput.write(str(flattenedentry))
                 else:
                     output.write(str(flattenedentry))
-                coordstr = str(flattenedentry).split(' ')[-1]
-                featurestr = str(flattenedentry).split(' ')[0]
+
+                coordstr = str(flattenedentry).split(' ', maxsplit=1)[-1]
+                featurestr = flattenedentry.signature
                 if coordstr not in coordtoorig:
                     coordtoorig[coordstr] = flattenedentry
                 else:
@@ -513,7 +601,8 @@ if __name__ == "__main__":
     print("Max repetition count: {}".format(max(coordset.values())))
     print("Times the names were repeated:  {}".format(timesrepeatedname))
     print("Max repetition count: {}".format(max(nameset.values())))
-    print("Max WL: {}".format(
-        max([int(x.split('_')[0]) for x in coordset.keys()])))
-    print("Max BL: {}".format(
-        max([int(x.split('_')[1]) for x in coordset.keys()])))
+
+    max_wl = max([b.x for e in flattenedlibrary for b in e.coords])
+    print("Max WL: {}".format(max_wl))
+    max_bl = max([b.y for e in flattenedlibrary for b in e.coords])
+    print("Max BL: {}".format(max_bl))
