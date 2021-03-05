@@ -13,7 +13,6 @@ import pkg_resources
 DB_FILES_DIR = Path(
     pkg_resources.resource_filename('quicklogic_fasm', 'ql732b'))
 
-
 class QL732BAssembler(fasm_assembler.FasmAssembler):
 
     def __init__(self, db):
@@ -261,6 +260,19 @@ def main():
     )
 
     parser.add_argument(
+        "--default-bitstream",
+        type=str,
+        default=None,
+        help="Path to an external default bitstream to overlay FASM on"
+    )
+
+    parser.add_argument(
+        "--no-default-bitstream",
+        action="store_true",
+        help="Do not use any default bitstream (i.e. use all-zero blank)"
+    )
+
+    parser.add_argument(
         "-d", "--disassemble",
         action="store_true",
         help="Disasseble bitstream"
@@ -287,7 +299,29 @@ def main():
     assembler = QL732BAssembler(db)
 
     if not args.disassemble:
-        assembler.parse_fasm_filename(args.infile)
+
+        # Load default bitstream
+        if not args.no_default_bitstream:
+
+            if args.default_bitstream is not None:
+                default_bitstream = args.default_bitstream
+
+                if not os.path.isfile(default_bitstream):
+                    print("The default bitstream '{}' does not exist".format(
+                        default_bitstream
+                    ))
+                    exit(errno.ENOENT)
+
+            else:
+                default_bitstream = os.path.join(
+                    args.db_root, "default_bitstream.bin")
+
+                if not os.path.isfile(default_bitstream):
+                    print("WARNING: No default bistream in the database")
+
+            assembler.read_bitstream(default_bitstream)
+
+        assembler.parse_fasm_filename(args.infile.name)
         assembler.produce_bitstream(args.outfile, verbose=args.verbose)
     else:
         assembler.read_bitstream(args.infile)
