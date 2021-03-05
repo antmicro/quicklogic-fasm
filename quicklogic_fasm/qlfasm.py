@@ -121,8 +121,9 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
         with open(outfilepath, 'w+b') as output:
             for batch in bitstream:
                 output.write(batch.to_bytes(4, 'little'))
-        
-        with open(Path(outfilepath.parent).joinpath("ram.mem"), 'w') as output:
+
+        mem_file = os.path.join(os.path.dirname(outfilepath), "ram.mem")
+        with open(mem_file, 'w') as output:
             for x,y in self.memdict.items():
                 output.write("0x{:08x}:0x{:08x}\n".format(x,y))
 
@@ -322,11 +323,11 @@ def main():
             if default_bitstream is not None:
                 assembler.read_bitstream(default_bitstream)
 
-        assembler.parse_fasm_filename(args.infile.name)
-        assembler.produce_bitstream(args.outfile, verbose=args.verbose)
+        assembler.parse_fasm_filename(str(args.infile))
+        assembler.produce_bitstream(str(args.outfile), verbose=args.verbose)
     else:
-        assembler.read_bitstream(args.infile)
-        assembler.disassemble(args.outfile, verbose=args.verbose)
+        assembler.read_bitstream(str(args.infile))
+        assembler.disassemble(str(args.outfile), verbose=args.verbose)
 
 
 if __name__ == "__main__":
