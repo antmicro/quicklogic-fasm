@@ -21,7 +21,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires = [
-        'fasm @ git+https://github.com/symbiflow/fasm#egg=fasm',
-        'fasm-utils @ git+https://github.com/QuickLogic-Corp/quicklogic-fasm-utils#egg=fasm-utils'
+        'fasm',
+        'fasm-utils @ git+https://github.com/QuickLogic-Corp/quicklogic-fasm-utils'
     ],
 )
