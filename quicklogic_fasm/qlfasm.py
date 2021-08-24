@@ -9,10 +9,6 @@ from pathlib import Path
 from fasm_utils.database import Database
 import pkg_resources
 
-
-DB_FILES_DIR = Path(
-    pkg_resources.resource_filename('quicklogic_fasm', 'ql732b'))
-
 class QL732BAssembler(fasm_assembler.FasmAssembler):
 
     def __init__(self, db):
@@ -215,7 +211,7 @@ class QL732BAssembler(fasm_assembler.FasmAssembler):
         return features
 
 
-def load_quicklogic_database(db_root=DB_FILES_DIR):
+def load_quicklogic_database(db_root):
     '''Creates Database object for QuickLogic Fabric.
 
     Parameters
@@ -254,10 +250,17 @@ def main():
     )
 
     parser.add_argument(
+        "--dev-type",
+        type=str,
+        required=True,
+        help="Device type (supported: eos-s3, pp3)"
+    )
+
+    parser.add_argument(
         "--db-root",
         type=str,
-        default=DB_FILES_DIR,
-        help="Path to the fasm database (def. '{}')".format(DB_FILES_DIR)
+        default=None,
+        help="Path to the fasm database (defaults based on device type)"
     )
 
     parser.add_argument(
@@ -287,6 +290,18 @@ def main():
 
     args = parser.parse_args()
 
+    db_dir = ""
+    if (args.db_root is not None):
+        db_dir = args.db_root
+    else:
+        if (args.dev_type == "ql-pp3"):
+            db_dir = Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql725a'))
+        elif (args.dev_type == "ql-eos-s3"):
+            db_dir = Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql732b'))
+        else:
+            print("Unsuported device type")
+            exit(errno.EINVAL)
+
     if not args.infile.exists:
         print("The input file does not exist")
         exit(errno.ENOENT)
@@ -295,7 +310,8 @@ def main():
         print("The path to file is not a valid directory")
         exit(errno.ENOTDIR)
 
-    db = load_quicklogic_database(args.db_root)
+    print("Using FASM database: {}".format(db_dir))
+    db = load_quicklogic_database(db_dir)
 
     assembler = QL732BAssembler(db)
 
@@ -315,7 +331,7 @@ def main():
 
             else:
                 default_bitstream = os.path.join(
-                    args.db_root, "default_bitstream.bin")
+                    db_dir, "default_bitstream.bin")
 
                 if not os.path.isfile(default_bitstream):
                     print("WARNING: No default bistream in the database")
