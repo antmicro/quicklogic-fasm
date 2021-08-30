@@ -93,6 +93,8 @@ def main():
             db_dir = Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql725a'))
         elif (args.dev_type == "ql-eos-s3"):
             db_dir = Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql732b'))
+        elif (args.dev_type == "ql-pp3e"):
+            db_dir = Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql732b')) # FIXME: add proper PP3E support
         else:
             print("Unsuported device type")
             exit(errno.EINVAL)
@@ -115,6 +117,9 @@ def main():
     elif (args.dev_type == "ql-eos-s3"):
         from quicklogic_fasm.eos_s3.ql732b import QLAssembler
         assembler = QLAssembler(db)
+    elif (args.dev_type == "ql-pp3e"):
+        from quicklogic_fasm.eos_s3.ql732b import QLAssembler
+        assembler = QLAssembler(db) # FIXME: add proper PP3E support
     else:
         print("Unsuported device type")
         exit(errno.EINVAL)
