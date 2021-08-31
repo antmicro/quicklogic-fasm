@@ -6,12 +6,12 @@ import os
 
 class QLAssembler(fasm_assembler.FasmAssembler):
 
-    def __init__(self, db):
-        '''Class for generating bitstream for QuickLogic's QL725A FPGA.
+    def __init__(self, db, max_bl, max_wl):
+        '''Class for generating bitstream for QuickLogic's QL732B FPGA.
 
         Class inherits from fasm_assembler.FasmAssembler class, and implements
         enable_feature method, as well as produce_bitstream method. It contains
-        the bitstream generation process for QL725A device.
+        the bitstream generation process for QL732B device.
         :param BANKSTARTBITIDX: contains the bit offset for a given bank
         :param MAXBL: the maximum value for bit line
         :param MAXWL: the maximum value for word line
@@ -22,8 +22,8 @@ class QLAssembler(fasm_assembler.FasmAssembler):
                                 673, 628, 583, 538, 493, 448, 403, 358,
                                 0, 43, 88, 133, 178, 223, 268, 313,
                                 673, 628, 583, 538, 493, 448, 403, 358]
-        self.MAXBL = 884
-        self.MAXWL = 886
+        self.MAXBL = max_bl
+        self.MAXWL = max_wl
 
         self.NUMOFBANKS = 32
 

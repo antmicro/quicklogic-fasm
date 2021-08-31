@@ -5,6 +5,8 @@ import errno
 from pathlib import Path
 from fasm_utils.database import Database
 import pkg_resources
+from quicklogic_fasm.qlassembler.pp3.ql725a import QL725AAssembler
+from quicklogic_fasm.qlassembler.eos_s3.ql732b import QL732BAssembler
 
 def load_quicklogic_database(db_root):
     '''Creates Database object for QuickLogic Fabric.
@@ -112,14 +114,11 @@ def main():
 
     assembler = None
     if (args.dev_type == "ql-pp3"):
-        from quicklogic_fasm.pp3.ql725a import QLAssembler
-        assembler = QLAssembler(db)
+        assembler = QL725AAssembler(db)
     elif (args.dev_type == "ql-eos-s3"):
-        from quicklogic_fasm.eos_s3.ql732b import QLAssembler
-        assembler = QLAssembler(db)
+        assembler = QL732BAssembler(db)
     elif (args.dev_type == "ql-pp3e"):
-        from quicklogic_fasm.eos_s3.ql732b import QLAssembler
-        assembler = QLAssembler(db) # FIXME: add proper PP3E support
+        assembler = QL732BAssembler(db) # FIXME: add proper PP3E support
     else:
         print("Unsuported device type")
         exit(errno.EINVAL)
