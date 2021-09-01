@@ -6,7 +6,12 @@ import os
 
 class QLAssembler(fasm_assembler.FasmAssembler):
 
-    def __init__(self, db, max_bl, max_wl):
+    BANKSTARTBITIDX = []
+    MAXBL = 0
+    MAXWL = 0
+    NUMOFBANKS = 1
+
+    def __init__(self, db):
         '''Class for generating bitstream for QuickLogic's QL732B FPGA.
 
         Class inherits from fasm_assembler.FasmAssembler class, and implements
@@ -18,15 +23,6 @@ class QLAssembler(fasm_assembler.FasmAssembler):
         :param NUMOFBANLS: the number of config bit banks
         '''
         super().__init__(db)
-        self.BANKSTARTBITIDX = [0, 43, 88, 133, 178, 223, 268, 313,
-                                673, 628, 583, 538, 493, 448, 403, 358,
-                                0, 43, 88, 133, 178, 223, 268, 313,
-                                673, 628, 583, 538, 493, 448, 403, 358]
-        self.MAXBL = max_bl
-        self.MAXWL = max_wl
-
-        self.NUMOFBANKS = 32
-
         self.BANKNUMBITS = math.ceil(self.MAXBL / (self.NUMOFBANKS / 2))
         self.memdict = dict()
         self.membaseaddress = {'X18Y30' : '0x4001b000', 'X1Y30' : '0x4001a000', 'X33Y2' : '0x40018000', 'X33Y16' : '0x40019000'}
@@ -68,6 +64,16 @@ class QLAssembler(fasm_assembler.FasmAssembler):
         # file.
         self._configuredbit = True
 
+    def calc_bitidx(self, banknum, bitnum):
+        '''calculates the bit index (Y coordinate) and .
+
+        Parameters
+        ----------
+        banknum: Bank number.
+        bitnum: bit number in bank.
+        '''
+        raise NotImplementedError()
+
     def produce_bitstream(self, outfilepath: str, verbose=False):
         def get_value_for_coord(wlidx, wlshift, bitidx):
             coord = (wlidx + wlshift, bitidx)
@@ -83,14 +89,9 @@ class QLAssembler(fasm_assembler.FasmAssembler):
                 currval = 0
                 for banknum in range(self.NUMOFBANKS - 1, -1, -1):
                     val = 1
-                    bitidx = 0
-                    if banknum in (0, 8, 16, 24):
-                        if bitnum in (0, 1):
-                            continue
-                        else:
-                            bitidx = self.BANKSTARTBITIDX[banknum] + bitnum - 2
-                    else:
-                        bitidx = self.BANKSTARTBITIDX[banknum] + bitnum
+                    bitidx = self.calc_bitidx(banknum, bitnum)
+                    if (bitidx == -1):
+                        continue
                     if banknum >= self.NUMOFBANKS // 2:
                         val = get_value_for_coord(wlidx, self.MAXWL // 2, bitidx)
                     else:
@@ -116,7 +117,7 @@ class QLAssembler(fasm_assembler.FasmAssembler):
 
     def read_bitstream(self, bitfilepath):
         '''Reads bitstream from file.
- 
+
         Parameters
         ----------
         bitfilepath: str

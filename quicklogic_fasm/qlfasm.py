@@ -116,7 +116,14 @@ def main():
 
     assembler = None
     if (args.dev_type == "ql-pp3"):
-        assembler = QL725AAssembler(db)
+        assembler = QL725AAssembler(db,
+                                    spi_master=True,
+                                    osc_freq=True,
+                                    ram_en=False,
+                                    cfg_write_chcksum_post=True,
+                                    cfg_read_chcksum_post=False,
+                                    cfg_done_out_mask=False,
+                                    add_header=True)
     elif (args.dev_type == "ql-eos-s3"):
         assembler = QL732BAssembler(db)
     elif (args.dev_type == "ql-pp3e"):
