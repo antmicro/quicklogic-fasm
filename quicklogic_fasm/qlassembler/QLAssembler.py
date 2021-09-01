@@ -86,7 +86,6 @@ class QLAssembler(fasm_assembler.FasmAssembler):
                     bitidx = 0
                     if banknum in (0, 8, 16, 24):
                         if bitnum in (0, 1):
-                            val = 0
                             continue
                         else:
                             bitidx = self.BANKSTARTBITIDX[banknum] + bitnum - 2
@@ -96,9 +95,6 @@ class QLAssembler(fasm_assembler.FasmAssembler):
                         val = get_value_for_coord(wlidx, self.MAXWL // 2, bitidx)
                     else:
                         val = get_value_for_coord(wlidx, 0, bitidx)
-
-                    if val == -1:
-                        val = 0
 
                     if val == 1:
                         currval = currval | (1 << banknum)
