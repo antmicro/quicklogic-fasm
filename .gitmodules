@@ -1,3 +1,6 @@
 [submodule "EOS-S3"]
 	path = EOS-S3
 	url = https://github.com/QuickLogic-Corp/EOS-S3.git
+[submodule "PolarPro3"]
+	path = PolarPro3
+	url = https://github.com/QuickLogic-Corp/PolarPro3.git

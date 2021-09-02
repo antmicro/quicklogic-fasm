@@ -7,3 +7,6 @@ recursive-include quicklogic_fasm *.py
 
 recursive-include quicklogic_fasm/ql732b *.db
 recursive-include quicklogic_fasm/ql732b *.bin
+
+recursive-include quicklogic_fasm/ql725a *.db
+recursive-include quicklogic_fasm/ql725a *.bin

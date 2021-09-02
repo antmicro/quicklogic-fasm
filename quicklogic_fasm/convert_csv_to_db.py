@@ -6,7 +6,20 @@ from fasm_utils.db_entry import DbEntry
 from fasm_utils.segbits import Bit
 from techfile_to_cell_loc import TechFile
 from contextlib import nullcontext
+from cdl_parser import read_and_parse_cdl_file
 
+cdl_file=""
+
+# A map of grid row coordinates to bit WL ranges.
+wl_map = {
+}
+
+# A map of grid col coortinates to bit BL ranges
+bl_map = {
+}
+
+maxcord_x = 0
+maxcord_y = 0
 
 class QLDbEntry(DbEntry):
     '''Class for extracting DB entries from CSV files for QuickLogic FPGAs.
@@ -38,80 +51,6 @@ class QLDbEntry(DbEntry):
         'macro_interface_top': 'INTERFACE',
         'macro_interface_top_left': 'INTERFACE',
         'macro_interface_top_right': 'INTERFACE'
-    }
-
-    # A map of grid row coordinates to bit WL ranges.
-    # Taken from QL732B_cdl.cmd
-    wl_map = {
-        1: (1, 28,),
-        2: (29, 56,),
-        3: (57, 84,),
-        4: (85, 112,),
-        5: (113, 140,),
-        6: (141, 168,),
-        7: (169, 196,),
-        8: (197, 224,),
-        9: (225, 252,),
-        10: (253, 281,),
-        11: (282, 309,),
-        12: (310, 337,),
-        13: (338, 365,),
-        14: (366, 393,),
-        15: (394, 421,),
-        16: (422, 449,),
-        17: (450, 477,),
-        18: (478, 505,),
-        19: (506, 533,),
-        20: (534, 561,),
-        21: (562, 589,),
-        22: (590, 617,),
-        23: (618, 645,),
-        24: (646, 674,),
-        25: (675, 702,),
-        26: (703, 730,),
-        27: (731, 758,),
-        28: (759, 786,),
-        29: (787, 814,),
-        30: (815, 842,),
-    }
-
-    # A map of grid col coortinates to bit BL ranges
-    # Taken from QL732B_cdl.cmd
-    bl_map = {
-        0: (1, 21,),
-        1: (22, 42,),
-        2: (43, 63,),
-        3: (64, 84,),
-        4: (85, 105,),
-        5: (106, 126,),
-        6: (127, 147,),
-        7: (148, 168,),
-        8: (169, 189,),
-        9: (190, 210,),
-        10: (211, 231,),
-        11: (232, 252,),
-        12: (253, 273,),
-        13: (274, 294,),
-        14: (295, 315,),
-        15: (316, 336,),
-        16: (337, 357,),
-        17: (358, 378,),
-        18: (379, 399,),
-        19: (400, 420,),
-        20: (421, 441,),
-        21: (442, 462,),
-        22: (463, 483,),
-        23: (484, 504,),
-        24: (505, 525,),
-        25: (526, 546,),
-        26: (547, 567,),
-        27: (568, 588,),
-        28: (589, 609,),
-        29: (610, 630,),
-        30: (631, 651,),
-        31: (652, 672,),
-        32: (673, 693,),
-        33: (694, 714,),
     }
 
     dbentrytemplate = 'X{site[0]}Y{site[1]}.{ctype}.{spectype}.{sig}'
@@ -176,12 +115,12 @@ class QLDbEntry(DbEntry):
         row = None
         col = None
 
-        for i, (l, h) in QLDbEntry.wl_map.items():
+        for i, (l, h) in wl_map.items():
             if wl >= l and wl <= h:
                 row = i
                 break
 
-        for i, (l, h) in QLDbEntry.bl_map.items():
+        for i, (l, h) in bl_map.items():
             if bl >= l and bl <= h:
                 col = i
                 break
@@ -314,11 +253,11 @@ class QLDbEntry(DbEntry):
 
             newcoord = (self.coords[0].x + dbentry.coords[0].x,
                         self.coords[0].y + dbentry.coords[0].y)
-            assert newcoord[0] < 844 and newcoord[1] < 716, \
+            assert newcoord[0] < maxcord_x and newcoord[1] < maxcord_y, \
                 "Coordinate values are exceeding the maximum values: \
                  computed ({} {}) limit ({} {})".format(newcoord[0],
                                                         newcoord[1],
-                                                        844, 716)
+                                                        maxcord_x, maxcord_y)
             newentry = QLDbEntry(
                 newsignature,
                 newcoord,
@@ -474,6 +413,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--cdl",
+        required=True,
+        help="The path to device specific cdl file"
+    )
+
+    parser.add_argument(
         "--include",
         nargs='+',
         help="The list of include files to use for macro replacement"
@@ -492,6 +437,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    cdl_file = args.cdl
     # Load CSV files. If the CSV is flattened, just print the output
     if not args.include:
         csvdata = process_csv_data(args.infile)
@@ -508,6 +454,14 @@ if __name__ == "__main__":
         print("You need to provide the names of macros to be replaced by the \
                given includes")
         exit(1)
+
+    # Load WL- and BL-maps
+    cdl_data = read_and_parse_cdl_file(cdl_file)
+    wl_map = cdl_data["wl_map"]
+    bl_map = cdl_data["bl_map"]
+
+    maxcord_x = list(wl_map.values())[-1][-1] + 2
+    maxcord_y = list(bl_map.values())[-1][-1] + 2
 
     # Load top CSV and convert it to QuickLogic database
     macrotopcsv = process_csv_data(args.infile)

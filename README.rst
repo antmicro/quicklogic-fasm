@@ -38,7 +38,7 @@ To create an OpenOCD file that can be used to flash the FPGA, you need to run::
 
     python -m quicklogic_fasm.bitstream_to_openocd <input.bin> <output.cfg>
 
-Generating Symbiflow Database (db) files from `EOS-S3 <https://github.com/QuickLogic-Corp/EOS-S3>`_ CSV files
+Generating Symbiflow Database (db) files from device CSV files
 -------------------------------------------------------------------------------------------------------------
 
 To generate a new FASM database, you should clone this repository::
@@ -46,8 +46,8 @@ To generate a new FASM database, you should clone this repository::
     git clone https://github.com/antmicro/quicklogic-fasm.git
     cd quicklogic-fasm
 
-After this, you can use ``gen_database.sh`` script that will run ``convert_csv_to_db.py`` script for all CSV files from EOS-S3 submodule::
+After this, you can use ``gen_database.sh`` script that will run ``convert_csv_to_db.py`` script for all CSV files from selected device submodule::
 
-    ./gen_database.sh <output-db-dir>
+    ./gen_database.sh -d <device-type> -o <output-db-dir>
 
-DB files from ``quicklogic_fasm/ql732b`` are the result of this script.
+DB files from ``quicklogic_fasm/ql732b`` and ``quicklogic_fasm/ql725a`` are the results of this script.
