@@ -143,6 +143,7 @@ def main():
 
                 if not os.path.isfile(default_bitstream):
                     print("WARNING: No default bistream in the database")
+                    default_bitstream = None
 
             if default_bitstream is not None:
                 assembler.read_bitstream(default_bitstream)
