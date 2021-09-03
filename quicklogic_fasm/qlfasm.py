@@ -27,6 +27,16 @@ def load_quicklogic_database(db_root):
             db.add_table(basename, entry.path)
     return db
 
+def get_db_dir(dev_type):
+    if (dev_type == "ql-pp3"):
+        return Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql725a'))
+    elif (dev_type == "ql-eos-s3"):
+        return Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql732b'))
+    elif (dev_type == "ql-pp3e"):
+        return Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql732b')) # FIXME: add proper PP3E support
+    else:
+        print("Unsuported device type")
+        exit(errno.EINVAL)
 
 def main():
 
@@ -91,15 +101,7 @@ def main():
     if (args.db_root is not None):
         db_dir = args.db_root
     else:
-        if (args.dev_type == "ql-pp3"):
-            db_dir = Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql725a'))
-        elif (args.dev_type == "ql-eos-s3"):
-            db_dir = Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql732b'))
-        elif (args.dev_type == "ql-pp3e"):
-            db_dir = Path(pkg_resources.resource_filename('quicklogic_fasm', 'ql732b')) # FIXME: add proper PP3E support
-        else:
-            print("Unsuported device type")
-            exit(errno.EINVAL)
+        db_dir = get_db_dir(args.dev_type)
 
     if not args.infile.exists:
         print("The input file does not exist")
