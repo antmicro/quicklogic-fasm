@@ -123,7 +123,8 @@ def main():
                                     cfg_write_chcksum_post=True,
                                     cfg_read_chcksum_post=False,
                                     cfg_done_out_mask=False,
-                                    add_header=True)
+                                    add_header=True,
+                                    add_checksum=True)
     elif (args.dev_type == "ql-eos-s3"):
         assembler = QL732BAssembler(db)
     elif (args.dev_type == "ql-pp3e"):
