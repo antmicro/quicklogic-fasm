@@ -182,23 +182,40 @@ class QL725AAssembler(qlasm.QLAssembler):
         bitfilepath: str
             A path to the binary file with bitstream
         '''
-        raise NotImplementedError()
+        bitstream = []
+        with open(bitfilepath, 'rb') as input:
+            while True:
+                bytes = input.read(4)
+                if not bytes:
+                    break
+                bitstream.append(int.from_bytes(bytes, 'little'))
 
-    def disassemble(self, outfilepath: str = None, verbose=False):
-        '''Converts bitstream to FASM lines.
+        def set_bit(wlidx, wlshift, bitidx, value):
+            coord = (wlidx + wlshift, bitidx)
+            if value == 1:
+                self.set_config_bit(coord, None)
+            else:
+                self.clear_config_bit(coord, None)
 
-        This method converts the bits obtained with `read_bitstream` method
-        to FASM lines and returns them. It also can save FASM lines to a file.
+        if (self.add_header):
+            if (bitstream[0] == 0x59):
+                bitstream = bitstream[6:]
+            else:
+                bitstream = bitstream[5:]
+        val = iter(bitstream)
+        for wlidx in reversed(range(self.MAXWL // 2)):
+            for bitnum in range(self.BANKNUMBITS):
+                currval = next(val)
+                for banknum in reversed(range(self.NUMOFBANKS)):
+                    bit = (currval >> banknum) & 1
+                    bitidx = 0
 
-        Parameters
-        ----------
-        outfilepath: str
-            An optional path to the output file containing FASM lines
-        verbose: bool
-            If true, the verbose messages will be printed in stdout
+                    bitidx = self.calc_bitidx(banknum, bitnum)
+                    if (bitidx == -1):
+                        continue
 
-        Returns
-        -------
-        list: A list of FASM lines
-        '''
-        raise NotImplementedError()
+                    if banknum >= self.NUMOFBANKS // 2:
+                        set_bit(wlidx, self.MAXWL // 2, bitidx, bit)
+                    else:
+                        set_bit(wlidx, 0, bitidx, bit)
+
