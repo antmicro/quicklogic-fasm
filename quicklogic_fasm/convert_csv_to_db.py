@@ -251,6 +251,11 @@ class QLDbEntry(DbEntry):
                 else:
                     newsignature = part
 
+            # FIXME: Special case for PP3: fixing missing FASM feature for designs with clock
+            if (dbentry.signature == ".macro_interface.I_if_block.I191.I_jcb" and dbentry.coords[0].x == 12 and dbentry.coords[0].y == 13):
+                newsignature = "INV.ASSPInvPortAlias"
+                newspectype = "ASSP"
+
             newcoord = (self.coords[0].x + dbentry.coords[0].x,
                         self.coords[0].y + dbentry.coords[0].y)
             assert newcoord[0] < maxcord_x and newcoord[1] < maxcord_y, \
