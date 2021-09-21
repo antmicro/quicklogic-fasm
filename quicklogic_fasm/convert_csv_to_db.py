@@ -117,13 +117,16 @@ class QLDbEntry(DbEntry):
 
         for i, (l, h) in wl_map.items():
             if wl >= l and wl <= h:
-                row = i
+                row = i + 1
                 break
 
         for i, (l, h) in bl_map.items():
             if bl >= l and bl <= h:
                 col = i
                 break
+
+        assert row is not None, (wl, bl)
+        assert col is not None, (wl, bl)
 
         return col, row
 
@@ -250,6 +253,11 @@ class QLDbEntry(DbEntry):
                     newsignature += "." + part
                 else:
                     newsignature = part
+
+            # FIXME: Special case for PP3: fixing missing FASM feature for designs with clock
+            if (dbentry.signature == ".macro_interface.I_if_block.I191.I_jcb" and dbentry.coords[0].x == 12 and dbentry.coords[0].y == 13):
+                newsignature = "INV.ASSPInvPortAlias"
+                newspectype = "ASSP"
 
             newcoord = (self.coords[0].x + dbentry.coords[0].x,
                         self.coords[0].y + dbentry.coords[0].y)
@@ -437,7 +445,15 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # Load WL- and BL-maps
     cdl_file = args.cdl
+    cdl_data = read_and_parse_cdl_file(cdl_file)
+    wl_map = cdl_data["wl_map"]
+    bl_map = cdl_data["bl_map"]
+
+    maxcord_x = list(wl_map.values())[-1][-1] + 2
+    maxcord_y = list(bl_map.values())[-1][-1] + 2
+
     # Load CSV files. If the CSV is flattened, just print the output
     if not args.include:
         csvdata = process_csv_data(args.infile)
@@ -454,14 +470,6 @@ if __name__ == "__main__":
         print("You need to provide the names of macros to be replaced by the \
                given includes")
         exit(1)
-
-    # Load WL- and BL-maps
-    cdl_data = read_and_parse_cdl_file(cdl_file)
-    wl_map = cdl_data["wl_map"]
-    bl_map = cdl_data["bl_map"]
-
-    maxcord_x = list(wl_map.values())[-1][-1] + 2
-    maxcord_y = list(bl_map.values())[-1][-1] + 2
 
     # Load top CSV and convert it to QuickLogic database
     macrotopcsv = process_csv_data(args.infile)
