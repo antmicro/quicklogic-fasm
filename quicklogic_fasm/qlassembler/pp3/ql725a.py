@@ -164,7 +164,7 @@ class QL725AAssembler(qlasm.QLAssembler):
 
         with open(outfilepath, 'w+b') as output:
             for batch in bitstream:
-                output.write(batch.to_bytes(4, 'little'))
+                output.write(bytes([batch]))
 
         mem_file = os.path.join(os.path.dirname(outfilepath), "ram.mem")
         with open(mem_file, 'w') as output:
@@ -185,7 +185,7 @@ class QL725AAssembler(qlasm.QLAssembler):
         bitstream = []
         with open(bitfilepath, 'rb') as input:
             while True:
-                bytes = input.read(4)
+                bytes = input.read(1)
                 if not bytes:
                     break
                 bitstream.append(int.from_bytes(bytes, 'little'))
