@@ -5,7 +5,7 @@ import os
 
 class QL725AAssembler(qlasm.QLAssembler):
 
-    bank_start_idx = [0, 222, 664, 443, 0, 222, 664, 443]
+    bank_start_idx = [0, 664, 0, 664, 222, 443, 222, 443]
 
     def __init__(self, db, spi_master=True, osc_freq=False, ram_en=0, cfg_write_chcksum_post=True,
                 cfg_read_chcksum_post=False, cfg_done_out_mask=False, add_header=True, add_checksum=True):
@@ -57,6 +57,18 @@ class QL725AAssembler(qlasm.QLAssembler):
         self.MAXBL = 886
         self.MAXWL = 888
         self.NUMOFBANKS = 8
+
+        self.BANK_WL = (
+            self.MAXWL // 2,
+            self.MAXWL // 2,
+            0,
+            0,
+            self.MAXWL // 2,
+            self.MAXWL // 2,
+            0,
+            0,
+        )
+
         super().__init__(db)
 
 
@@ -182,40 +194,75 @@ class QL725AAssembler(qlasm.QLAssembler):
         bitfilepath: str
             A path to the binary file with bitstream
         '''
-        bitstream = []
-        with open(bitfilepath, 'rb') as input:
-            while True:
-                bytes = input.read(4)
-                if not bytes:
-                    break
-                bitstream.append(int.from_bytes(bytes, 'little'))
 
-        def set_bit(wlidx, wlshift, bitidx, value):
-            coord = (wlidx + wlshift, bitidx)
-            if value == 1:
-                self.set_config_bit(coord, None)
-            else:
-                self.clear_config_bit(coord, None)
+        # Load the bitstream
+        with open(bitfilepath, "rb") as fp:
+            bitstream = fp.read()
 
-        if (self.add_header):
-            if (bitstream[0] == 0x59):
-                bitstream = bitstream[6:]
-            else:
+        # Check if we have SPI master header. If so then skip it
+        if bitstream[0] == 0x59:
+            if bitstream[1] in [
+                    0b00111100,
+                    0b01101001,
+                    0b10010110,
+                    0b11000011,
+                ]:
                 bitstream = bitstream[5:]
-        val = iter(bitstream)
-        for wlidx in reversed(range(self.MAXWL // 2)):
-            for bitnum in range(self.BANKNUMBITS):
-                currval = next(val)
-                for banknum in reversed(range(self.NUMOFBANKS)):
-                    bit = (currval >> banknum) & 1
-                    bitidx = 0
 
-                    bitidx = self.calc_bitidx(banknum, bitnum)
-                    if (bitidx == -1):
-                        continue
+        # Check size
+        num_cfg_bits = self.MAXWL * self.MAXBL
+        num_cfg_bytes = num_cfg_bits // 8
+        if len(bitstream) < num_cfg_bytes:
+            raise RuntimeError("Bitstream too short ({} vs {})".format(
+                len(bitstream), num_cfg_bits // 8))
 
-                    if banknum >= self.NUMOFBANKS // 2:
-                        set_bit(wlidx, self.MAXWL // 2, bitidx, bit)
+        #sr_pattern = dict()
+
+        BANK_LENGTH = (
+            222, 222, 222, 222,
+            221, 221, 221, 221,
+        )
+
+        # Decode config bits
+        for i in range(num_cfg_bytes):
+            word = bitstream[i]
+
+            for j in range(self.NUMOFBANKS):
+                bit = int((word & (1 << j)) != 0)
+
+                # Decode WL and BL
+                wl = i // 222
+                bl = i  % 222
+                assert wl < 444, wl
+                assert bl < 222, bl
+
+#                # DEBUG
+#                key = (wl, j)
+#                if key not in sr_pattern:
+#                    sr_pattern[key] = []
+#                sr_pattern[key].append(bit)
+
+                # Add base WL and BL
+                wl += self.BANK_WL[j]
+                bl += self.BANKSTARTBITIDX[j]
+
+                assert wl < self.MAXWL, (j, wl, self.MAXWL)
+                assert bl < self.MAXBL, (j, bl, self.MAXBL)
+
+                # Set/clear the bit
+                try:
+                    if bit == 1:
+                        self.set_config_bit((wl, bl), None)
                     else:
-                        set_bit(wlidx, 0, bitidx, bit)
+                        self.clear_config_bit((wl, bl), None)
+                except Exception as ex:
+                    print(repr(ex))
 
+#        # DEBUG
+#        with open("sr_pattern.csv", "w") as fp:
+#            keys = sorted(sr_pattern.keys())
+#            for k in keys:
+#                line  = "{},{},".format(*k)
+#                line += "".join([str(b) for b in sr_pattern[k]])
+#                line += "\n"
+#                fp.write(line) 
