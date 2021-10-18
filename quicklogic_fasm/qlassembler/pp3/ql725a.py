@@ -5,7 +5,7 @@ import os
 
 class QL725AAssembler(qlasm.QLAssembler):
 
-    bank_start_idx = [0, 222, 664, 443, 0, 222, 664, 443]
+    bank_start_idx = [0, 664, 0, 664, 222, 443, 222, 443]
 
     def __init__(self, db, spi_master=True, osc_freq=False, ram_en=0, cfg_write_chcksum_post=True,
                 cfg_read_chcksum_post=False, cfg_done_out_mask=False, add_header=True, add_checksum=True):
@@ -68,7 +68,7 @@ class QL725AAssembler(qlasm.QLAssembler):
         banknum: Bank number.
         bitnum: bit number in bank.
         '''
-        if banknum in (1, 3, 4, 6):     # Banks with max bit line == 221
+        if banknum in (4, 5, 6, 7):     # Banks with max bit line == 221
             if bitnum == 0:
                 return -1
             else:
@@ -145,7 +145,7 @@ class QL725AAssembler(qlasm.QLAssembler):
                     bitidx = self.calc_bitidx(banknum, bitnum)
                     if (bitidx == -1):
                         continue
-                    if banknum >= self.NUMOFBANKS // 2:
+                    if banknum in [2, 6, 7, 3]:
                         val = get_value_for_coord(wlidx, self.MAXWL // 2, bitidx)
                     else:
                         val = get_value_for_coord(wlidx, 0, bitidx)
@@ -202,6 +202,7 @@ class QL725AAssembler(qlasm.QLAssembler):
                 bitstream = bitstream[6:-4]
             else:
                 bitstream = bitstream[5:-4]
+
         val = iter(bitstream)
         for wlidx in reversed(range(self.MAXWL // 2)):
             for bitnum in range(self.BANKNUMBITS):
@@ -214,7 +215,7 @@ class QL725AAssembler(qlasm.QLAssembler):
                     if (bitidx == -1):
                         continue
 
-                    if banknum >= self.NUMOFBANKS // 2:
+                    if banknum in [2, 6, 7, 3]:
                         set_bit(wlidx, self.MAXWL // 2, bitidx, bit)
                     else:
                         set_bit(wlidx, 0, bitidx, bit)
