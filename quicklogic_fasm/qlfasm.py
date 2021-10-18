@@ -95,6 +95,13 @@ def main():
         help="Adds some verbose messages during bitstream production"
     )
 
+    parser.add_argument(
+        "--bitmap",
+        type=str,
+        default=None,
+        help="Output CSV file with the device bitmap"
+    )
+
     args = parser.parse_args()
 
     db_dir = ""
@@ -164,6 +171,42 @@ def main():
         assembler.read_bitstream(str(args.infile))
         assembler.disassemble(str(args.outfile), verbose=args.verbose)
 
+    # Write bitmap
+    #
+    # Writes a CSV file with MAXWL rows and MAXBL columns. Each fields
+    # represents one bit. A field may take one of the values:
+    # - 0x00 the bit is unused,
+    # - 0x01 the bit is defined in the database,
+    # - 0x02 the bit is set in the bitstream but not in the database,
+    # - 0x03 the bit is set both in the bitstream and in thhe database.
+    #
+    if args.bitmap:
+
+        total_bits = assembler.MAXWL * assembler.MAXBL
+        bitmap = bytearray(total_bits)
+
+        # Mark bits present in the database
+        for entry in assembler.db:
+            for coord in entry.coords:
+                ofs = coord.x * assembler.MAXBL + coord.y
+                bitmap[ofs] |= 0x1
+
+        # Mark bits set in the bitstream
+        for wl in range(assembler.MAXWL):
+            for bl in range(assembler.MAXBL):
+                bit = assembler.configbits.get((wl, bl), 0)
+                ofs = wl * assembler.MAXBL + bl
+                if bit == 1:
+                    bitmap[ofs] |= 0x2
+
+        # Write to CSV
+        with open(args.bitmap, "w") as fp:
+            for wl in range(assembler.MAXWL):
+                i0 = assembler.MAXBL *  wl
+                i1 = assembler.MAXBL * (wl + 1)
+
+                line = ",".join([str(b) for b in bitmap[i0:i1]]) + "\n"
+                fp.write(line)
 
 if __name__ == "__main__":
     main()
