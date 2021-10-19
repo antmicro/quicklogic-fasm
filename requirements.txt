@@ -1,2 +1,2 @@
--e git://github.com/symbiflow/fasm.git#egg=fasm
--e git://github.com/antmicro/quicklogic-fasm-utils.git#egg=fasm-utils
+fasm
+-e git://github.com/QuickLogic-Corp/quicklogic-fasm-utils#egg=fasm-utils
