@@ -199,9 +199,9 @@ class QL725AAssembler(qlasm.QLAssembler):
 
         if (self.add_header):
             if (bitstream[0] == 0x59):
-                bitstream = bitstream[6:]
+                bitstream = bitstream[6:-4]
             else:
-                bitstream = bitstream[5:]
+                bitstream = bitstream[5:-4]
         val = iter(bitstream)
         for wlidx in reversed(range(self.MAXWL // 2)):
             for bitnum in range(self.BANKNUMBITS):
