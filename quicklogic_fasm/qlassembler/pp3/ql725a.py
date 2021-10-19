@@ -91,9 +91,9 @@ class QL725AAssembler(qlasm.QLAssembler):
             command = (self.cfg_done_out_mask << 7) | command
 
         if (self.spi_master):
-            header.append(0x59)  # fixed PP3-specific preamble
-        header.append(command)      # internal oscillator frequency and checksum config
-        header.append(self.ram_en)       # parameter 0 - one hot RAM enable config
+            header.append(0x59)         # fixed PP3-specific preamble
+        header.append(command)          # internal oscillator frequency and checksum config
+        header.append(self.ram_en)      # parameter 0 - one hot RAM enable config
 
         # parameters 1-3 - reserved
         for i in range(0, 3):
