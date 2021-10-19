@@ -1,0 +1,30 @@
+name: Run tests
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [ 'tests/test_bitstream_roundtrip.py' ]
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: env
+        run: |
+            python3 -m venv env
+            . env/bin/activate
+            pip install wheel pytest
+            pip install -e .
+
+      - name: Run pytest
+        run: |
+            . env/bin/activate
+            pytest ${{ matrix.test }}
