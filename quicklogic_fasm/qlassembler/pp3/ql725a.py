@@ -5,7 +5,7 @@ import os
 
 class QL725AAssembler(qlasm.QLAssembler):
 
-    bank_start_idx = [0, 222, 664, 443, 0, 222, 664, 443]
+    bank_start_idx = [0, 664, 0, 664, 222, 443, 222, 443]
 
     def __init__(self, db, spi_master=True, osc_freq=False, ram_en=0, cfg_write_chcksum_post=True,
                 cfg_read_chcksum_post=False, cfg_done_out_mask=False, add_header=True, add_checksum=True):
@@ -68,7 +68,7 @@ class QL725AAssembler(qlasm.QLAssembler):
         banknum: Bank number.
         bitnum: bit number in bank.
         '''
-        if banknum in (1, 3, 4, 6):     # Banks with max bit line == 221
+        if banknum in (4, 5, 6, 7):     # Banks with max bit line == 221
             if bitnum == 0:
                 return -1
             else:
@@ -91,9 +91,9 @@ class QL725AAssembler(qlasm.QLAssembler):
             command = (self.cfg_done_out_mask << 7) | command
 
         if (self.spi_master):
-            header.append(0x59)  # fixed PP3-specific preamble
-        header.append(command)      # internal oscillator frequency and checksum config
-        header.append(self.ram_en)       # parameter 0 - one hot RAM enable config
+            header.append(0x59)         # fixed PP3-specific preamble
+        header.append(command)          # internal oscillator frequency and checksum config
+        header.append(self.ram_en)      # parameter 0 - one hot RAM enable config
 
         # parameters 1-3 - reserved
         for i in range(0, 3):
@@ -145,7 +145,7 @@ class QL725AAssembler(qlasm.QLAssembler):
                     bitidx = self.calc_bitidx(banknum, bitnum)
                     if (bitidx == -1):
                         continue
-                    if banknum >= self.NUMOFBANKS // 2:
+                    if banknum in [2, 6, 7, 3]:
                         val = get_value_for_coord(wlidx, self.MAXWL // 2, bitidx)
                     else:
                         val = get_value_for_coord(wlidx, 0, bitidx)
@@ -164,7 +164,7 @@ class QL725AAssembler(qlasm.QLAssembler):
 
         with open(outfilepath, 'w+b') as output:
             for batch in bitstream:
-                output.write(batch.to_bytes(4, 'little'))
+                output.write(bytes([batch]))
 
         mem_file = os.path.join(os.path.dirname(outfilepath), "ram.mem")
         with open(mem_file, 'w') as output:
@@ -185,7 +185,7 @@ class QL725AAssembler(qlasm.QLAssembler):
         bitstream = []
         with open(bitfilepath, 'rb') as input:
             while True:
-                bytes = input.read(4)
+                bytes = input.read(1)
                 if not bytes:
                     break
                 bitstream.append(int.from_bytes(bytes, 'little'))
@@ -199,9 +199,10 @@ class QL725AAssembler(qlasm.QLAssembler):
 
         if (self.add_header):
             if (bitstream[0] == 0x59):
-                bitstream = bitstream[6:]
+                bitstream = bitstream[6:-4]
             else:
-                bitstream = bitstream[5:]
+                bitstream = bitstream[5:-4]
+
         val = iter(bitstream)
         for wlidx in reversed(range(self.MAXWL // 2)):
             for bitnum in range(self.BANKNUMBITS):
@@ -214,7 +215,7 @@ class QL725AAssembler(qlasm.QLAssembler):
                     if (bitidx == -1):
                         continue
 
-                    if banknum >= self.NUMOFBANKS // 2:
+                    if banknum in [2, 6, 7, 3]:
                         set_bit(wlidx, self.MAXWL // 2, bitidx, bit)
                     else:
                         set_bit(wlidx, 0, bitidx, bit)
