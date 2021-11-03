@@ -102,6 +102,13 @@ def main():
         help="Output CSV file with the device bitmap"
     )
 
+    parser.add_argument(
+        "--no-verify-checksum",
+        action="store_false",
+        dest="verify_checksum",
+        help="Disable bitstream checksum verification on decoding"
+    )
+
     args = parser.parse_args()
 
     db_dir = ""
@@ -131,7 +138,8 @@ def main():
                                     cfg_read_chcksum_post=False,
                                     cfg_done_out_mask=False,
                                     add_header=True,
-                                    add_checksum=True)
+                                    add_checksum=True,
+                                    verify_checksum=args.verify_checksum)
     elif (args.dev_type == "ql-eos-s3"):
         assembler = QL732BAssembler(db)
     elif (args.dev_type == "ql-pp3e"):
