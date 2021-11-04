@@ -8,7 +8,8 @@ class QL725AAssembler(qlasm.QLAssembler):
     bank_start_idx = [0, 664, 0, 664, 222, 443, 222, 443]
 
     def __init__(self, db, spi_master=True, osc_freq=False, ram_en=0, cfg_write_chcksum_post=True,
-                cfg_read_chcksum_post=False, cfg_done_out_mask=False, add_header=True, add_checksum=True):
+                cfg_read_chcksum_post=False, cfg_done_out_mask=False, add_header=True, add_checksum=True,
+                verify_checksum=True):
         '''Class for generating bitstream for QuickLogic's QL725A FPGA.
         :param spi_master: True - assembler mode for SPI Master bitstream generation, False - SPI Slave
         :param osc_freq: internal oscillator frequency select True - high (20MHz), False - low (5MHz),
@@ -52,6 +53,7 @@ class QL725AAssembler(qlasm.QLAssembler):
         self.cfg_done_out_mask = int(cfg_done_out_mask)
         self.add_header = add_header
         self.add_checksum = add_checksum
+        self.verify_checksum = bool(verify_checksum)
 
         self.BANKSTARTBITIDX = self.bank_start_idx
         self.MAXBL = 886
@@ -101,28 +103,34 @@ class QL725AAssembler(qlasm.QLAssembler):
 
         return header;
 
+    def checksum(self, data):
+        crc_sum1 = 0
+        crc_sum2 = 0
+
+        words = [int.from_bytes(data[i:i+2], "little") \
+                 for i in range(0, len(data), 2)]
+
+        for word in words:
+            crc_sum1 = (crc_sum1 + word)     & 0x0000FFFF
+            crc_sum2 = (crc_sum2 + crc_sum1) & 0x0000FFFF
+
+        c0 = (0x0000FFFF ^ ((crc_sum1 + crc_sum2) & 0x0000FFFF)) + 1
+        c1 = (0x0000FFFF ^ ((crc_sum1 + c0)       & 0x0000FFFF)) + 1
+
+        return (c1 << 16) | c0
+
     def produce_bitstream_checksum(self, bitstream):
         checksum = 0
 
         # FIXME: include RAM data in checksum calculation based on ram_en
         if (self.spi_master):
-            checksum = self.fletcher32(bitstream[6:])
+            checksum = self.checksum(bitstream[6:])
         else:
-            checksum = self.fletcher32(bitstream[5:])
+            checksum = self.checksum(bitstream[5:])
 
         checksum_bytes = checksum.to_bytes(4, "little")
 
         return checksum_bytes
-
-    def fletcher32(self, data):
-        c0 = 0
-        c1 = 0
-
-        for byte in data:
-            c0 = (c0 + byte) % 65535
-            c1 = (c1 + c0) % 65535
-
-        return (c1 << 16) | c0
 
     def produce_bitstream(self, outfilepath: str, verbose=False):
         def get_value_for_coord(wlidx, wlshift, bitidx):
@@ -182,26 +190,59 @@ class QL725AAssembler(qlasm.QLAssembler):
         bitfilepath: str
             A path to the binary file with bitstream
         '''
-        bitstream = []
-        with open(bitfilepath, 'rb') as input:
-            while True:
-                bytes = input.read(1)
-                if not bytes:
-                    break
-                bitstream.append(int.from_bytes(bytes, 'little'))
 
+        # Load the bitstream
+        with open(bitfilepath, "rb") as fp:
+            bitstream = fp.read()
+
+        # Handle header and CRC
+        if self.add_header:
+            if (bitstream[0] == 0x59):
+                bitstream = bitstream[6:]
+            else:
+                bitstream = bitstream[5:]
+
+            crc_read = int.from_bytes(bitstream[-4:], "little")
+            bitstream = bitstream[:-4]
+
+        else:
+            crc_read = None
+
+        # Compute and check CRC
+        if crc_read is not None:
+            crc_calc = self.checksum(bitstream)
+
+            if crc_calc != crc_read:
+                msg = "CRC mismatch! (computed: {:08X}, read: {:08X})".format(
+                    crc_calc, crc_read)
+
+                if self.verify_checksum:
+                    raise RuntimeError(msg)
+                else:
+                    print("WARNING: " + msg)
+
+        # Check size, throw an error if too short
+        # FIXME: Handle presence/absence of RAM init bits
+        num_cfg_bits = self.MAXWL * self.MAXBL
+        num_cfg_bytes = num_cfg_bits // 8
+        if len(bitstream) < num_cfg_bytes:
+            raise RuntimeError("Bitstream too short ({} vs {})".format(
+                len(bitstream), num_cfg_bits // 8))
+
+        # Trim if too long
+        # FIXME: Handle presence/absence of RAM init bits
+        if len(bitstream) > num_cfg_bits:
+            print("WARNING: Bitstream too long ({} vs {}). Trimming...".format(
+                len(bitstream), num_cfg_bits // 8))
+            bitstream = bitstream[:(num_cfg_bits // 8)]
+
+        # Decode config bits
         def set_bit(wlidx, wlshift, bitidx, value):
             coord = (wlidx + wlshift, bitidx)
             if value == 1:
                 self.set_config_bit(coord, None)
             else:
                 self.clear_config_bit(coord, None)
-
-        if (self.add_header):
-            if (bitstream[0] == 0x59):
-                bitstream = bitstream[6:-4]
-            else:
-                bitstream = bitstream[5:-4]
 
         val = iter(bitstream)
         for wlidx in reversed(range(self.MAXWL // 2)):
@@ -219,4 +260,3 @@ class QL725AAssembler(qlasm.QLAssembler):
                         set_bit(wlidx, self.MAXWL // 2, bitidx, bit)
                     else:
                         set_bit(wlidx, 0, bitidx, bit)
-
