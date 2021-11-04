@@ -61,6 +61,26 @@ class QL725AAssembler(qlasm.QLAssembler):
         self.NUMOFBANKS = 8
         super().__init__(db)
 
+    def set_spi_master(self, spi_master=True):
+        '''Changes the SPI mode of the bitstream writer.
+        :param spi_master: True - assembler mode for SPI Master bitstream generation, False - SPI Slave
+        '''
+        self.spi_master = int(spi_master)
+
+
+    def set_header(self, add_header=True):
+        '''Changes the option whether to add or not a header to the bitstream file.
+        :param add_header: include PP3 specific header to the beginning of the final bitstream file
+        '''
+        self.add_header = add_header
+
+
+    def set_checksum(self, add_checksum=True):
+        '''Changes the option whether to add or not a checksum to the bitstream file.
+        :param add_checksum: include checksum for the configuration and RAM initialization payload
+                             at the end of the final bitstream file
+        '''
+        self.add_checksum = add_checksum
 
     def calc_bitidx(self, banknum, bitnum):
         '''calculates the bit index (Y coordinate) and .
@@ -132,6 +152,20 @@ class QL725AAssembler(qlasm.QLAssembler):
 
         return checksum_bytes
 
+    def format_outfile_name(self, outfilepath: str):
+        if (not self.add_header and not self.add_checksum):
+            if (outfilepath.endswith(".bit")):
+                return outfilepath[:-4] + "_no_header_checksum.bit"
+            else:
+                return outfilepath + "_no_header_checksum"
+        if (self.spi_master):
+                return outfilepath
+        else:
+            if (outfilepath.endswith(".bit")):
+                return outfilepath[:-4] + "_spi_slave.bit"
+            else:
+                return outfilepath + "_spi_slave"
+
     def produce_bitstream(self, outfilepath: str, verbose=False):
         def get_value_for_coord(wlidx, wlshift, bitidx):
             coord = (wlidx + wlshift, bitidx)
@@ -170,7 +204,8 @@ class QL725AAssembler(qlasm.QLAssembler):
         if verbose:
             print('Size of bitstream:  {}B'.format(len(bitstream) * 4))
 
-        with open(outfilepath, 'w+b') as output:
+        bitfilepath = self.format_outfile_name(outfilepath)
+        with open(bitfilepath, 'w+b') as output:
             for batch in bitstream:
                 output.write(bytes([batch]))
 
@@ -202,9 +237,9 @@ class QL725AAssembler(qlasm.QLAssembler):
             else:
                 bitstream = bitstream[5:]
 
+        if self.add_checksum:
             crc_read = int.from_bytes(bitstream[-4:], "little")
             bitstream = bitstream[:-4]
-
         else:
             crc_read = None
 

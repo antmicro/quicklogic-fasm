@@ -174,7 +174,22 @@ def main():
                 assembler.read_bitstream(default_bitstream)
 
         assembler.parse_fasm_filename(str(args.infile))
-        assembler.produce_bitstream(str(args.outfile), verbose=args.verbose)
+
+        if (args.dev_type == "ql-pp3"):
+            # Producing 3 bitstream configurations:
+            # 1. SPI master mode enabled (original filename)
+            # 2. SPI slave mode enabled (filename with _spi_slave)
+            # 3. No header and checksum (filename with _no_header_checksum)
+            assembler.produce_bitstream(str(args.outfile), verbose=args.verbose)
+
+            assembler.set_spi_master(False)
+            assembler.produce_bitstream(str(args.outfile), verbose=args.verbose)
+
+            assembler.set_header(False)
+            assembler.set_checksum(False)
+            assembler.produce_bitstream(str(args.outfile), verbose=args.verbose)
+        else:
+            assembler.produce_bitstream(str(args.outfile), verbose=args.verbose)
     else:
         assembler.read_bitstream(str(args.infile))
         assembler.disassemble(str(args.outfile), verbose=args.verbose)
