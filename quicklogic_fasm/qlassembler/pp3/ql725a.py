@@ -8,16 +8,15 @@ class QL725AAssembler(qlasm.QLAssembler):
     bank_start_idx = [0, 664, 0, 664, 222, 443, 222, 443]
     rambaseaddress = {'X1Y1' : '0x3000', 'X18Y1' : '0x2000', 'X1Y34' : '0x0000', 'X18Y34' : '0x1000'}
     # All RAMs disabled by default; ram_bank_block_en['X1Y34'][1] --> enable state of block 1 in RAM Bank2
-    rammap = {'X1Y1' : 0, 'X18Y1' : 1, 'X1Y34' : 2, 'X18Y34' : 3}
+    ram_bank_map = {'X1Y1' : 0, 'X18Y1' : 1, 'X1Y34' : 2, 'X18Y34' : 3}
     ram_bank_block_en = {'X1Y1' : [0, 0], 'X18Y1' : [0, 0], 'X1Y34' : [0, 0], 'X18Y34' : [0, 0]}
 
-    def __init__(self, db, spi_master=True, osc_freq=False, ram_en=0, cfg_write_chcksum_post=True,
+    def __init__(self, db, spi_master=True, osc_freq=False, cfg_write_chcksum_post=True,
                 cfg_read_chcksum_post=False, cfg_done_out_mask=False, add_header=True, add_checksum=True,
                 verify_checksum=True):
         '''Class for generating bitstream for QuickLogic's QL725A FPGA.
         :param spi_master: True - assembler mode for SPI Master bitstream generation, False - SPI Slave
         :param osc_freq: internal oscillator frequency select True - high (20MHz), False - low (5MHz),
-        :param ram_en: one-hot coded RAM access enable - when bit[i] is set to 1, it means ith RAM will be written,
         :param cfg_write_chcksum_post: UNUSED when spi_master==False
                 True - Configuration Write Checksum Post: PolarProIII reads the data back and
                     performs the checksum after the data is written to Cfg Bit Cells and RAM.
@@ -51,7 +50,6 @@ class QL725AAssembler(qlasm.QLAssembler):
         '''
         self.spi_master = int(spi_master)
         self.osc_freq = int(osc_freq)
-        self.ram_en = ram_en
         self.cfg_read_chcksum_post = int(cfg_read_chcksum_post)
         self.cfg_write_chcksum_post = int(cfg_write_chcksum_post)
         self.cfg_done_out_mask = int(cfg_done_out_mask)
@@ -63,6 +61,7 @@ class QL725AAssembler(qlasm.QLAssembler):
         self.MAXBL = 886
         self.MAXWL = 888
         self.NUMOFBANKS = 8
+        self.ram_en = 0 # One-hot coded RAM access enable
         super().__init__(db)
         self.membaseaddress = self.rambaseaddress
 
@@ -120,7 +119,18 @@ class QL725AAssembler(qlasm.QLAssembler):
         if (self.spi_master):
             header.append(0x59)         # fixed PP3-specific preamble
         header.append(command)          # internal oscillator frequency and checksum config
-        header.append(self.ram_en)      # parameter 0 - one hot RAM enable config
+
+        for bankname, blocks in self.ram_bank_block_en.items():
+            block_no = 0
+            for block_en in blocks:
+                bit = (self.ram_bank_map[bankname] * 2) + block_no
+                if (block_en):
+                    self.ram_en |= (block_en << bit)
+                else:
+                    self.ram_en &= ~(1 << bit)
+                block_no += 1
+
+        header.append(self.ram_en)
 
         # parameters 1-3 - reserved
         for i in range(0, 3):

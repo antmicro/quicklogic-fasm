@@ -133,7 +133,6 @@ def main():
         assembler = QL725AAssembler(db,
                                     spi_master=True,
                                     osc_freq=True,
-                                    ram_en=False,
                                     cfg_write_chcksum_post=True,
                                     cfg_read_chcksum_post=False,
                                     cfg_done_out_mask=False,
