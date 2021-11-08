@@ -6,6 +6,10 @@ import os
 class QL725AAssembler(qlasm.QLAssembler):
 
     bank_start_idx = [0, 664, 0, 664, 222, 443, 222, 443]
+    rambaseaddress = {'X1Y1' : '0x3000', 'X18Y1' : '0x2000', 'X1Y34' : '0x0000', 'X18Y34' : '0x1000'}
+    # All RAMs disabled by default; ram_bank_block_en['X1Y34'][1] --> enable state of block 1 in RAM Bank2
+    rammap = {'X1Y1' : 0, 'X18Y1' : 1, 'X1Y34' : 2, 'X18Y34' : 3}
+    ram_bank_block_en = {'X1Y1' : [0, 0], 'X18Y1' : [0, 0], 'X1Y34' : [0, 0], 'X18Y34' : [0, 0]}
 
     def __init__(self, db, spi_master=True, osc_freq=False, ram_en=0, cfg_write_chcksum_post=True,
                 cfg_read_chcksum_post=False, cfg_done_out_mask=False, add_header=True, add_checksum=True,
@@ -60,6 +64,7 @@ class QL725AAssembler(qlasm.QLAssembler):
         self.MAXWL = 888
         self.NUMOFBANKS = 8
         super().__init__(db)
+        self.membaseaddress = self.rambaseaddress
 
     def set_spi_master(self, spi_master=True):
         '''Changes the SPI mode of the bitstream writer.
@@ -209,13 +214,31 @@ class QL725AAssembler(qlasm.QLAssembler):
             for batch in bitstream:
                 output.write(bytes([batch]))
 
-        mem_file = os.path.join(os.path.dirname(outfilepath), "ram.mem")
-        with open(mem_file, 'w') as output:
-            for x,y in self.memdict.items():
-                output.write("0x{:08x}:0x{:08x}\n".format(x,y))
-
     def populate_meminit(self, fasmline: FasmLine):
-        raise NotImplementedError()
+        featurevalue = fasmline.set_feature.value
+        bankname = fasmline.set_feature.feature[:-13]
+        baseaddress = int (self.membaseaddress[bankname], 16)
+        bankconfigsize = ((fasmline.set_feature.end + 1) // 18) - (fasmline.set_feature.start // 18)
+
+        assert bankconfigsize in {512, 1024}, "Wrong RAM init bits amount: {} for bank: {}".format(bankconfigsize, bankname)
+
+        # Fill ram_enable dataset
+        if (bankconfigsize == 512):
+            if (fasmline.set_feature.start == 0):       # Enable Block0
+                self.ram_bank_block_en[bankname][0] = 1
+            elif (fasmline.set_feature.start == 9216):  # Enable Block1
+                self.ram_bank_block_en[bankname][1] = 1
+            else:
+                raise ValueError("Incorrect start bit value: {} for feature: {}".format(fasmline.set_feature.start, bankname))
+        else:
+            self.ram_bank_block_en[bankname][0] = 1     # Enable both RAM Blocks
+            self.ram_bank_block_en[bankname][1] = 1
+
+        # Save memory configuration
+        for i in range(fasmline.set_feature.start // 18, (fasmline.set_feature.end + 1) // 18):
+            value = featurevalue & 0x3FFFF
+            featurevalue = featurevalue >> 18
+            self.memdict[baseaddress+i*4] = value;
 
     def read_bitstream(self, bitfilepath):
         '''Reads bitstream from file.
