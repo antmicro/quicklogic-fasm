@@ -31,9 +31,9 @@ class QLAssembler(fasm_assembler.FasmAssembler):
         featurevalue = fasmline.set_feature.value
         baseaddress = int (self.membaseaddress[fasmline.set_feature.feature[:-13]], 16)
         for i in range(fasmline.set_feature.start //18, (fasmline.set_feature.end + 1) //18):
-           value = featurevalue & 262143
-           featurevalue = featurevalue >> 18
-           self.memdict[baseaddress+i*4] = value;
+            value = featurevalue & 262143
+            featurevalue = featurevalue >> 18
+            self.memdict[baseaddress+i*4] = value;
     
 
     def enable_feature(self, fasmline: FasmLine):
