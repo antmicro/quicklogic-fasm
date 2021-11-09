@@ -11,6 +11,12 @@ class QL725AAssembler(qlasm.QLAssembler):
     ram_bank_map = {'X1Y1' : 0, 'X18Y1' : 1, 'X1Y34' : 2, 'X18Y34' : 3}
     ram_bank_block_en = {'X1Y1' : [0, 0], 'X18Y1' : [0, 0], 'X1Y34' : [0, 0], 'X18Y34' : [0, 0]}
 
+    INIT_BITS_PER_RAM_CELL = 18
+    TOTAL_BITS_PER_RAM_CELL = 32
+    CELLS_PER_RAM_BLOCK = 512
+    RAM_PADDING = TOTAL_BITS_PER_RAM_CELL - INIT_BITS_PER_RAM_CELL
+    BYTES_PER_RAM_BLOCK = CELLS_PER_RAM_BLOCK * TOTAL_BITS_PER_RAM_CELL // 8
+
     def __init__(self, db, spi_master=True, osc_freq=False, cfg_write_chcksum_post=True,
                 cfg_read_chcksum_post=False, cfg_done_out_mask=False, add_header=True, add_checksum=True,
                 verify_checksum=True):
@@ -191,11 +197,12 @@ class QL725AAssembler(qlasm.QLAssembler):
                 bank_no = bit_no // 2
                 bank_name = inv_ram_bank_map[bank_no]
                 bank_base_addr = int(self.rambaseaddress[bank_name], 16)
-                block_base_addr = bank_base_addr + (2048 * block_no)
-                for i in range(512):
-                    ram_addr = block_base_addr + (i * 4)
+                block_base_addr = bank_base_addr + (self.BYTES_PER_RAM_BLOCK * block_no)
+                for i in range(self.CELLS_PER_RAM_BLOCK):
+                    bytes_per_cell = self.TOTAL_BITS_PER_RAM_CELL // 8
+                    ram_addr = block_base_addr + (i * bytes_per_cell)
                     ram_data = self.memdict[ram_addr]
-                    for byte_no in range(4):
+                    for byte_no in range(bytes_per_cell):
                         ram_byte = (ram_data >> (8 * byte_no)) & 0xFF
                         ram_init_data.append(ram_byte)
         return ram_init_data
@@ -250,15 +257,15 @@ class QL725AAssembler(qlasm.QLAssembler):
         featurevalue = fasmline.set_feature.value
         bankname = fasmline.set_feature.feature[:-13]
         baseaddress = int (self.membaseaddress[bankname], 16)
-        bankconfigsize = ((fasmline.set_feature.end + 1) // 18) - (fasmline.set_feature.start // 18)
+        bankconfigsize = ((fasmline.set_feature.end + 1) // self.INIT_BITS_PER_RAM_CELL) - (fasmline.set_feature.start // self.INIT_BITS_PER_RAM_CELL)
 
-        assert bankconfigsize in {512, 1024}, "Wrong RAM init bits amount: {} for bank: {}".format(bankconfigsize, bankname)
+        assert bankconfigsize in {self.CELLS_PER_RAM_BLOCK, self.CELLS_PER_RAM_BLOCK * 2}, "Wrong RAM init bits amount: {} for bank: {}".format(bankconfigsize, bankname)
 
         # Fill ram_enable dataset
-        if (bankconfigsize == 512):
+        if (bankconfigsize == self.CELLS_PER_RAM_BLOCK):
             if (fasmline.set_feature.start == 0):       # Enable Block0
                 self.ram_bank_block_en[bankname][0] = 1
-            elif (fasmline.set_feature.start == 9216):  # Enable Block1
+            elif (fasmline.set_feature.start == self.CELLS_PER_RAM_BLOCK * self.INIT_BITS_PER_RAM_CELL):  # Enable Block1
                 self.ram_bank_block_en[bankname][1] = 1
             else:
                 raise ValueError("Incorrect start bit value: {} for feature: {}".format(fasmline.set_feature.start, bankname))
@@ -267,9 +274,9 @@ class QL725AAssembler(qlasm.QLAssembler):
             self.ram_bank_block_en[bankname][1] = 1
 
         # Save memory configuration
-        for i in range(fasmline.set_feature.start // 18, (fasmline.set_feature.end + 1) // 18):
+        for i in range(fasmline.set_feature.start // self.INIT_BITS_PER_RAM_CELL, (fasmline.set_feature.end + 1) // self.INIT_BITS_PER_RAM_CELL):
             value = featurevalue & 0x3FFFF
-            featurevalue = featurevalue >> 18
+            featurevalue = featurevalue >> self.INIT_BITS_PER_RAM_CELL
             self.memdict[baseaddress+i*4] = value;
 
     def read_bitstream(self, bitfilepath):
