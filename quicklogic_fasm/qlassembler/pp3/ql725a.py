@@ -157,7 +157,6 @@ class QL725AAssembler(qlasm.QLAssembler):
     def produce_bitstream_checksum(self, bitstream):
         checksum = 0
 
-        # FIXME: include RAM data in checksum calculation based on ram_en
         if (self.spi_master):
             checksum = self.checksum(bitstream[6:])
         else:
@@ -180,6 +179,26 @@ class QL725AAssembler(qlasm.QLAssembler):
                 return outfilepath[:-4] + "_spi_slave.bit"
             else:
                 return outfilepath + "_spi_slave"
+
+    def prepare_ram_init_data(self):
+        inv_ram_bank_map = {val: key for key, val in self.ram_bank_map.items()}
+        ram_init_data = []
+
+        for bit_no in range(8):
+            block_en = (self.ram_en >> bit_no) & 1
+            if (block_en):
+                block_no = bit_no % 2
+                bank_no = bit_no // 2
+                bank_name = inv_ram_bank_map[bank_no]
+                bank_base_addr = int(self.rambaseaddress[bank_name], 16)
+                block_base_addr = bank_base_addr + (2048 * block_no)
+                for i in range(512):
+                    ram_addr = block_base_addr + (i * 4)
+                    ram_data = self.memdict[ram_addr]
+                    for byte_no in range(4):
+                        ram_byte = (ram_data >> (8 * byte_no)) & 0xFF
+                        ram_init_data.append(ram_byte)
+        return ram_init_data
 
     def produce_bitstream(self, outfilepath: str, verbose=False):
         def get_value_for_coord(wlidx, wlshift, bitidx):
@@ -212,6 +231,9 @@ class QL725AAssembler(qlasm.QLAssembler):
                 if verbose:
                     print('{}_{}:  {:02X}'.format(wlidx, bitnum, currval))
                 bitstream.append(currval)
+
+        ram_data = self.prepare_ram_init_data()
+        bitstream += ram_data
 
         if (self.add_checksum):
             bitstream += self.produce_bitstream_checksum(bitstream)
