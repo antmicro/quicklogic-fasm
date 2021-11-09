@@ -258,7 +258,7 @@ class QL725AAssembler(qlasm.QLAssembler):
 
         # Check size, throw an error if too short
         # FIXME: Handle presence/absence of RAM init bits
-        num_cfg_bits = self.MAXWL * self.MAXBL
+        num_cfg_bits = self.BANKNUMBITS * self.NUMOFBANKS * self.MAXWL // 2
         num_cfg_bytes = num_cfg_bits // 8
         if len(bitstream) < num_cfg_bytes:
             raise RuntimeError("Bitstream too short ({} vs {})".format(
