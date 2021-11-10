@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from quicklogic_fasm.qlassembler import QLAssembler as qlasm
-from fasm import FasmLine
+from fasm import FasmLine, SetFasmFeature, ValueFormat, set_feature_to_str
 import os
 
 class QL725AAssembler(qlasm.QLAssembler):
@@ -382,3 +382,81 @@ class QL725AAssembler(qlasm.QLAssembler):
                 bank.append(block)
             self.ram_init_config[self.inv_ram_bank_map[ram_bank]] = bank
 
+    def disassemble(self, outfilepath: str = None, verbose=False):
+        '''Converts bitstream to FASM lines.
+
+        This method converts the bits obtained with `read_bitstream` method
+        to FASM lines and returns them. It also can save FASM lines to a file.
+
+        Parameters
+        ----------
+        outfilepath: str
+            An optional path to the output file containing FASM lines
+        verbose: bool
+            If true, the verbose messages will be printed in stdout
+
+        Returns
+        -------
+        list: A list of FASM lines
+        '''
+        unknown_bits = set([coord for coord, val in self.configbits.items()
+                            if bool(val)])
+
+        features = []
+        # Prepare configuration features
+        for feature in self.db:
+            for bit in feature.coords:
+                coord = (bit.x, bit.y)
+                if coord not in self.configbits \
+                        or bool(self.configbits[coord]) != bit.isset:
+                    break
+            else:
+                features.append(feature.signature)
+                unknown_bits -= set([(bit.x, bit.y) for bit in feature.coords])
+                if verbose:
+                    print(f'{feature.signature}')
+
+        # Prepare RAM init features
+        init_bits_per_ram_block = self.INIT_BITS_PER_RAM_CELL * self.CELLS_PER_RAM_BLOCK
+        bank_no = 0
+        for name, bank in self.ram_init_config.items():
+            block_no = 0
+            feature_bits_no = 0
+            bank_data = 0
+            for block in bank:
+                if (block):
+                    feature_bits_no += init_bits_per_ram_block
+                    bank_data_it = feature_bits_no - self.INIT_BITS_PER_RAM_CELL
+                    ram_byte = iter(reversed(block))
+                    for ram_cell in range(self.CELLS_PER_RAM_BLOCK):
+                        ram_init32 = 0
+                        for byte_no in reversed(range(4)):
+                            byte = next(ram_byte)
+                            byte &= 0xFF
+                            ram_init32 |= (byte << (byte_no * 8))
+                        ram_init18 = ram_init32 & 0x3FFFF
+                        bank_data |= (ram_init18 << (bank_data_it))
+                        bank_data_it -= self.INIT_BITS_PER_RAM_CELL
+                block_no += 1
+
+            if (feature_bits_no):
+                feature = SetFasmFeature(
+                    feature=self.inv_ram_bank_map[bank_no] + ".RAM.RAM.INIT",
+                    start=0,
+                    end=feature_bits_no - 1,
+                    value=bank_data,
+                    value_format=ValueFormat.VERILOG_BINARY)
+                sfeature = set_feature_to_str(feature)
+                features.append(sfeature)
+            bank_no += 1
+
+        # Write FASM
+        if outfilepath is not None:
+            with open(outfilepath, 'w') as fasm_file:
+                print(*features, sep='\n', file=fasm_file)
+
+                if len(unknown_bits):
+                    for bit in unknown_bits:
+                        print(f'{{ unknown_bit =  "{bit.x}_{bit.y}"}}',
+                              file=fasm_file)
+        return features
