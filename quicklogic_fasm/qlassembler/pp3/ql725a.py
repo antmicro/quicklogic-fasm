@@ -9,7 +9,9 @@ class QL725AAssembler(qlasm.QLAssembler):
     rambaseaddress = {'X1Y1' : '0x3000', 'X18Y1' : '0x2000', 'X1Y34' : '0x0000', 'X18Y34' : '0x1000'}
     # All RAMs disabled by default; ram_bank_block_en['X1Y34'][1] --> enable state of block 1 in RAM Bank2
     ram_bank_map = {'X1Y1' : 0, 'X18Y1' : 1, 'X1Y34' : 2, 'X18Y34' : 3}
+    inv_ram_bank_map = {val: key for key, val in ram_bank_map.items()}
     ram_bank_block_en = {'X1Y1' : [0, 0], 'X18Y1' : [0, 0], 'X1Y34' : [0, 0], 'X18Y34' : [0, 0]}
+    ram_init_config = {}
 
     INIT_BITS_PER_RAM_CELL = 18
     TOTAL_BITS_PER_RAM_CELL = 32
@@ -187,7 +189,6 @@ class QL725AAssembler(qlasm.QLAssembler):
                 return outfilepath + "_spi_slave"
 
     def prepare_ram_init_data(self):
-        inv_ram_bank_map = {val: key for key, val in self.ram_bank_map.items()}
         ram_init_data = []
 
         for bit_no in range(8):
@@ -195,7 +196,7 @@ class QL725AAssembler(qlasm.QLAssembler):
             if (block_en):
                 block_no = bit_no % 2
                 bank_no = bit_no // 2
-                bank_name = inv_ram_bank_map[bank_no]
+                bank_name = self.inv_ram_bank_map[bank_no]
                 bank_base_addr = int(self.rambaseaddress[bank_name], 16)
                 block_base_addr = bank_base_addr + (self.BYTES_PER_RAM_BLOCK * block_no)
                 for i in range(self.CELLS_PER_RAM_BLOCK):
@@ -295,8 +296,10 @@ class QL725AAssembler(qlasm.QLAssembler):
         # Handle header and CRC
         if self.add_header:
             if (bitstream[0] == 0x59):
+                ram_en = bitstream[2]
                 bitstream = bitstream[6:]
             else:
+                ram_en = bitstream[1]
                 bitstream = bitstream[5:]
 
         if self.add_checksum:
@@ -318,20 +321,28 @@ class QL725AAssembler(qlasm.QLAssembler):
                 else:
                     print("WARNING: " + msg)
 
-        # Check size, throw an error if too short
-        # FIXME: Handle presence/absence of RAM init bits
+        # Get size of RAM initialization bits
+        ram_init_bytes = 0
+        for bit_no in range(8):
+            block_en = (ram_en >> bit_no) & 1
+            if (block_en):
+                ram_init_bytes += self.BYTES_PER_RAM_BLOCK
+
+        # Get size of configuration bits
         num_cfg_bits = self.BANKNUMBITS * self.NUMOFBANKS * self.MAXWL // 2
         num_cfg_bytes = num_cfg_bits // 8
-        if len(bitstream) < num_cfg_bytes:
+
+        # Check size, throw an error if too short
+        exp_bitstream_size = num_cfg_bytes + ram_init_bytes
+        if len(bitstream) < exp_bitstream_size:
             raise RuntimeError("Bitstream too short ({} vs {})".format(
-                len(bitstream), num_cfg_bits // 8))
+                len(bitstream), exp_bitstream_size))
 
         # Trim if too long
-        # FIXME: Handle presence/absence of RAM init bits
-        if len(bitstream) > num_cfg_bits:
+        if len(bitstream) > exp_bitstream_size:
             print("WARNING: Bitstream too long ({} vs {}). Trimming...".format(
-                len(bitstream), num_cfg_bits // 8))
-            bitstream = bitstream[:(num_cfg_bits // 8)]
+                len(bitstream), exp_bitstream_size))
+            bitstream = bitstream[:exp_bitstream_size]
 
         # Decode config bits
         def set_bit(wlidx, wlshift, bitidx, value):
@@ -357,3 +368,17 @@ class QL725AAssembler(qlasm.QLAssembler):
                         set_bit(wlidx, self.MAXWL // 2, bitidx, bit)
                     else:
                         set_bit(wlidx, 0, bitidx, bit)
+
+        # Read RAM init bits
+        for ram_bank in range(4):
+            bank = []
+            for ram_block in range(2):
+                block = []
+                block_en = (ram_en >> ((ram_bank * 2) + ram_block)) & 1
+                if (block_en):
+                    for ram_byte in range(self.BYTES_PER_RAM_BLOCK):
+                        currval = next(val)
+                        block.append(currval)
+                bank.append(block)
+            self.ram_init_config[self.inv_ram_bank_map[ram_bank]] = bank
+
