@@ -19,7 +19,7 @@ class QL725AAssembler(qlasm.QLAssembler):
     RAM_PADDING = TOTAL_BITS_PER_RAM_CELL - INIT_BITS_PER_RAM_CELL
     BYTES_PER_RAM_BLOCK = CELLS_PER_RAM_BLOCK * TOTAL_BITS_PER_RAM_CELL // 8
 
-    def __init__(self, db, spi_master=True, osc_freq=False, cfg_write_chcksum_post=True,
+    def __init__(self, db, spi_master=True, osc_freq=False, cfg_write_chcksum_post=False,
                 cfg_read_chcksum_post=False, cfg_done_out_mask=False, add_header=True, add_checksum=True,
                 verify_checksum=True):
         '''Class for generating bitstream for QuickLogic's QL725A FPGA.

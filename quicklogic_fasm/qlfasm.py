@@ -132,8 +132,8 @@ def main():
     if (args.dev_type == "ql-pp3"):
         assembler = QL725AAssembler(db,
                                     spi_master=True,
-                                    osc_freq=True,
-                                    cfg_write_chcksum_post=True,
+                                    osc_freq=False,
+                                    cfg_write_chcksum_post=False,
                                     cfg_read_chcksum_post=False,
                                     cfg_done_out_mask=False,
                                     add_header=True,
