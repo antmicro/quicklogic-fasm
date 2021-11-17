@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
 from quicklogic_fasm.qlassembler import QLAssembler as qlasm
-from fasm import FasmLine
+from fasm import FasmLine, SetFasmFeature, ValueFormat, set_feature_to_str
 import os
 
 class QL725AAssembler(qlasm.QLAssembler):
 
     bank_start_idx = [0, 664, 0, 664, 222, 443, 222, 443]
+    rambaseaddress = {'X1Y1' : '0x3000', 'X18Y1' : '0x2000', 'X1Y34' : '0x0000', 'X18Y34' : '0x1000'}
+    # All RAMs disabled by default; ram_bank_block_en['X1Y34'][1] --> enable state of block 1 in RAM Bank2
+    ram_bank_map = {'X1Y1' : 0, 'X18Y1' : 1, 'X1Y34' : 2, 'X18Y34' : 3}
+    inv_ram_bank_map = {val: key for key, val in ram_bank_map.items()}
+    ram_bank_block_en = {'X1Y1' : [0, 0], 'X18Y1' : [0, 0], 'X1Y34' : [0, 0], 'X18Y34' : [0, 0]}
+    ram_init_config = {}
 
-    def __init__(self, db, spi_master=True, osc_freq=False, ram_en=0, cfg_write_chcksum_post=True,
+    INIT_BITS_PER_RAM_CELL = 18
+    TOTAL_BITS_PER_RAM_CELL = 32
+    CELLS_PER_RAM_BLOCK = 512
+    RAM_PADDING = TOTAL_BITS_PER_RAM_CELL - INIT_BITS_PER_RAM_CELL
+    BYTES_PER_RAM_BLOCK = CELLS_PER_RAM_BLOCK * TOTAL_BITS_PER_RAM_CELL // 8
+
+    def __init__(self, db, spi_master=True, osc_freq=False, cfg_write_chcksum_post=True,
                 cfg_read_chcksum_post=False, cfg_done_out_mask=False, add_header=True, add_checksum=True,
                 verify_checksum=True):
         '''Class for generating bitstream for QuickLogic's QL725A FPGA.
         :param spi_master: True - assembler mode for SPI Master bitstream generation, False - SPI Slave
         :param osc_freq: internal oscillator frequency select True - high (20MHz), False - low (5MHz),
-        :param ram_en: one-hot coded RAM access enable - when bit[i] is set to 1, it means ith RAM will be written,
         :param cfg_write_chcksum_post: UNUSED when spi_master==False
                 True - Configuration Write Checksum Post: PolarProIII reads the data back and
                     performs the checksum after the data is written to Cfg Bit Cells and RAM.
@@ -47,7 +58,6 @@ class QL725AAssembler(qlasm.QLAssembler):
         '''
         self.spi_master = int(spi_master)
         self.osc_freq = int(osc_freq)
-        self.ram_en = ram_en
         self.cfg_read_chcksum_post = int(cfg_read_chcksum_post)
         self.cfg_write_chcksum_post = int(cfg_write_chcksum_post)
         self.cfg_done_out_mask = int(cfg_done_out_mask)
@@ -59,7 +69,9 @@ class QL725AAssembler(qlasm.QLAssembler):
         self.MAXBL = 886
         self.MAXWL = 888
         self.NUMOFBANKS = 8
+        self.ram_en = 0 # One-hot coded RAM access enable
         super().__init__(db)
+        self.membaseaddress = self.rambaseaddress
 
     def set_spi_master(self, spi_master=True):
         '''Changes the SPI mode of the bitstream writer.
@@ -115,7 +127,18 @@ class QL725AAssembler(qlasm.QLAssembler):
         if (self.spi_master):
             header.append(0x59)         # fixed PP3-specific preamble
         header.append(command)          # internal oscillator frequency and checksum config
-        header.append(self.ram_en)      # parameter 0 - one hot RAM enable config
+
+        for bankname, blocks in self.ram_bank_block_en.items():
+            block_no = 0
+            for block_en in blocks:
+                bit = (self.ram_bank_map[bankname] * 2) + block_no
+                if (block_en):
+                    self.ram_en |= (block_en << bit)
+                else:
+                    self.ram_en &= ~(1 << bit)
+                block_no += 1
+
+        header.append(self.ram_en)
 
         # parameters 1-3 - reserved
         for i in range(0, 3):
@@ -142,7 +165,6 @@ class QL725AAssembler(qlasm.QLAssembler):
     def produce_bitstream_checksum(self, bitstream):
         checksum = 0
 
-        # FIXME: include RAM data in checksum calculation based on ram_en
         if (self.spi_master):
             checksum = self.checksum(bitstream[6:])
         else:
@@ -165,6 +187,26 @@ class QL725AAssembler(qlasm.QLAssembler):
                 return outfilepath[:-4] + "_spi_slave.bit"
             else:
                 return outfilepath + "_spi_slave"
+
+    def prepare_ram_init_data(self):
+        ram_init_data = []
+
+        for bit_no in range(8):
+            block_en = (self.ram_en >> bit_no) & 1
+            if (block_en):
+                block_no = bit_no % 2
+                bank_no = bit_no // 2
+                bank_name = self.inv_ram_bank_map[bank_no]
+                bank_base_addr = int(self.rambaseaddress[bank_name], 16)
+                block_base_addr = bank_base_addr + (self.BYTES_PER_RAM_BLOCK * block_no)
+                for i in range(self.CELLS_PER_RAM_BLOCK):
+                    bytes_per_cell = self.TOTAL_BITS_PER_RAM_CELL // 8
+                    ram_addr = block_base_addr + (i * bytes_per_cell)
+                    ram_data = self.memdict[ram_addr]
+                    for byte_no in range(bytes_per_cell):
+                        ram_byte = (ram_data >> (8 * byte_no)) & 0xFF
+                        ram_init_data.append(ram_byte)
+        return ram_init_data
 
     def produce_bitstream(self, outfilepath: str, verbose=False):
         def get_value_for_coord(wlidx, wlshift, bitidx):
@@ -198,6 +240,9 @@ class QL725AAssembler(qlasm.QLAssembler):
                     print('{}_{}:  {:02X}'.format(wlidx, bitnum, currval))
                 bitstream.append(currval)
 
+        ram_data = self.prepare_ram_init_data()
+        bitstream += ram_data
+
         if (self.add_checksum):
             bitstream += self.produce_bitstream_checksum(bitstream)
 
@@ -209,13 +254,31 @@ class QL725AAssembler(qlasm.QLAssembler):
             for batch in bitstream:
                 output.write(bytes([batch]))
 
-        mem_file = os.path.join(os.path.dirname(outfilepath), "ram.mem")
-        with open(mem_file, 'w') as output:
-            for x,y in self.memdict.items():
-                output.write("0x{:08x}:0x{:08x}\n".format(x,y))
-
     def populate_meminit(self, fasmline: FasmLine):
-        raise NotImplementedError()
+        featurevalue = fasmline.set_feature.value
+        bankname = fasmline.set_feature.feature[:-13]
+        baseaddress = int (self.membaseaddress[bankname], 16)
+        bankconfigsize = ((fasmline.set_feature.end + 1) // self.INIT_BITS_PER_RAM_CELL) - (fasmline.set_feature.start // self.INIT_BITS_PER_RAM_CELL)
+
+        assert bankconfigsize in {self.CELLS_PER_RAM_BLOCK, self.CELLS_PER_RAM_BLOCK * 2}, "Wrong RAM init bits amount: {} for bank: {}".format(bankconfigsize, bankname)
+
+        # Fill ram_enable dataset
+        if (bankconfigsize == self.CELLS_PER_RAM_BLOCK):
+            if (fasmline.set_feature.start == 0):       # Enable Block0
+                self.ram_bank_block_en[bankname][0] = 1
+            elif (fasmline.set_feature.start == self.CELLS_PER_RAM_BLOCK * self.INIT_BITS_PER_RAM_CELL):  # Enable Block1
+                self.ram_bank_block_en[bankname][1] = 1
+            else:
+                raise ValueError("Incorrect start bit value: {} for feature: {}".format(fasmline.set_feature.start, bankname))
+        else:
+            self.ram_bank_block_en[bankname][0] = 1     # Enable both RAM Blocks
+            self.ram_bank_block_en[bankname][1] = 1
+
+        # Save memory configuration
+        for i in range(fasmline.set_feature.start // self.INIT_BITS_PER_RAM_CELL, (fasmline.set_feature.end + 1) // self.INIT_BITS_PER_RAM_CELL):
+            value = featurevalue & 0x3FFFF
+            featurevalue = featurevalue >> self.INIT_BITS_PER_RAM_CELL
+            self.memdict[baseaddress+i*4] = value;
 
     def read_bitstream(self, bitfilepath):
         '''Reads bitstream from file.
@@ -233,8 +296,10 @@ class QL725AAssembler(qlasm.QLAssembler):
         # Handle header and CRC
         if self.add_header:
             if (bitstream[0] == 0x59):
+                ram_en = bitstream[2]
                 bitstream = bitstream[6:]
             else:
+                ram_en = bitstream[1]
                 bitstream = bitstream[5:]
 
         if self.add_checksum:
@@ -256,20 +321,28 @@ class QL725AAssembler(qlasm.QLAssembler):
                 else:
                     print("WARNING: " + msg)
 
-        # Check size, throw an error if too short
-        # FIXME: Handle presence/absence of RAM init bits
-        num_cfg_bits = self.MAXWL * self.MAXBL
+        # Get size of RAM initialization bits
+        ram_init_bytes = 0
+        for bit_no in range(8):
+            block_en = (ram_en >> bit_no) & 1
+            if (block_en):
+                ram_init_bytes += self.BYTES_PER_RAM_BLOCK
+
+        # Get size of configuration bits
+        num_cfg_bits = self.BANKNUMBITS * self.NUMOFBANKS * self.MAXWL // 2
         num_cfg_bytes = num_cfg_bits // 8
-        if len(bitstream) < num_cfg_bytes:
+
+        # Check size, throw an error if too short
+        exp_bitstream_size = num_cfg_bytes + ram_init_bytes
+        if len(bitstream) < exp_bitstream_size:
             raise RuntimeError("Bitstream too short ({} vs {})".format(
-                len(bitstream), num_cfg_bits // 8))
+                len(bitstream), exp_bitstream_size))
 
         # Trim if too long
-        # FIXME: Handle presence/absence of RAM init bits
-        if len(bitstream) > num_cfg_bits:
+        if len(bitstream) > exp_bitstream_size:
             print("WARNING: Bitstream too long ({} vs {}). Trimming...".format(
-                len(bitstream), num_cfg_bits // 8))
-            bitstream = bitstream[:(num_cfg_bits // 8)]
+                len(bitstream), exp_bitstream_size))
+            bitstream = bitstream[:exp_bitstream_size]
 
         # Decode config bits
         def set_bit(wlidx, wlshift, bitidx, value):
@@ -295,3 +368,95 @@ class QL725AAssembler(qlasm.QLAssembler):
                         set_bit(wlidx, self.MAXWL // 2, bitidx, bit)
                     else:
                         set_bit(wlidx, 0, bitidx, bit)
+
+        # Read RAM init bits
+        for ram_bank in range(4):
+            bank = []
+            for ram_block in range(2):
+                block = []
+                block_en = (ram_en >> ((ram_bank * 2) + ram_block)) & 1
+                if (block_en):
+                    for ram_byte in range(self.BYTES_PER_RAM_BLOCK):
+                        currval = next(val)
+                        block.append(currval)
+                bank.append(block)
+            self.ram_init_config[self.inv_ram_bank_map[ram_bank]] = bank
+
+    def disassemble(self, outfilepath: str = None, verbose=False):
+        '''Converts bitstream to FASM lines.
+
+        This method converts the bits obtained with `read_bitstream` method
+        to FASM lines and returns them. It also can save FASM lines to a file.
+
+        Parameters
+        ----------
+        outfilepath: str
+            An optional path to the output file containing FASM lines
+        verbose: bool
+            If true, the verbose messages will be printed in stdout
+
+        Returns
+        -------
+        list: A list of FASM lines
+        '''
+        unknown_bits = set([coord for coord, val in self.configbits.items()
+                            if bool(val)])
+
+        features = []
+        # Prepare configuration features
+        for feature in self.db:
+            for bit in feature.coords:
+                coord = (bit.x, bit.y)
+                if coord not in self.configbits \
+                        or bool(self.configbits[coord]) != bit.isset:
+                    break
+            else:
+                features.append(feature.signature)
+                unknown_bits -= set([(bit.x, bit.y) for bit in feature.coords])
+                if verbose:
+                    print(f'{feature.signature}')
+
+        # Prepare RAM init features
+        init_bits_per_ram_block = self.INIT_BITS_PER_RAM_CELL * self.CELLS_PER_RAM_BLOCK
+        bank_no = 0
+        for name, bank in self.ram_init_config.items():
+            block_no = 0
+            feature_bits_no = 0
+            bank_data = 0
+            for block in bank:
+                if (block):
+                    feature_bits_no += init_bits_per_ram_block
+                    bank_data_it = feature_bits_no - self.INIT_BITS_PER_RAM_CELL
+                    ram_byte = iter(reversed(block))
+                    for ram_cell in range(self.CELLS_PER_RAM_BLOCK):
+                        ram_init32 = 0
+                        for byte_no in reversed(range(4)):
+                            byte = next(ram_byte)
+                            byte &= 0xFF
+                            ram_init32 |= (byte << (byte_no * 8))
+                        ram_init18 = ram_init32 & 0x3FFFF
+                        bank_data |= (ram_init18 << (bank_data_it))
+                        bank_data_it -= self.INIT_BITS_PER_RAM_CELL
+                block_no += 1
+
+            if (feature_bits_no):
+                feature = SetFasmFeature(
+                    feature=self.inv_ram_bank_map[bank_no] + ".RAM.RAM.INIT",
+                    start=0,
+                    end=feature_bits_no - 1,
+                    value=bank_data,
+                    value_format=ValueFormat.VERILOG_BINARY)
+                sfeature = set_feature_to_str(feature)
+                features.append(sfeature)
+            bank_no += 1
+
+        # Write FASM
+        if outfilepath is not None:
+            with open(outfilepath, 'w') as fasm_file:
+                print(*features, sep='\n', file=fasm_file)
+
+                if len(unknown_bits):
+                    for bit in unknown_bits:
+                        print(f'{{ unknown_bit =  "{bit.x}_{bit.y}"}}',
+                              file=fasm_file)
+        return features
