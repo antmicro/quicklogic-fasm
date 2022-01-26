@@ -157,8 +157,8 @@ class QL725AAssembler(qlasm.QLAssembler):
             crc_sum1 = (crc_sum1 + word)     & 0x0000FFFF
             crc_sum2 = (crc_sum2 + crc_sum1) & 0x0000FFFF
 
-        c0 = (0x0000FFFF ^ ((crc_sum1 + crc_sum2) & 0x0000FFFF)) + 1
-        c1 = (0x0000FFFF ^ ((crc_sum1 + c0)       & 0x0000FFFF)) + 1
+        c0 = ((0x0000FFFF ^ ((crc_sum1 + crc_sum2) & 0x0000FFFF)) + 1) & 0x0000FFFF
+        c1 = ((0x0000FFFF ^ ((crc_sum1 + c0)       & 0x0000FFFF)) + 1) & 0x0000FFFF
 
         return (c1 << 16) | c0
 
