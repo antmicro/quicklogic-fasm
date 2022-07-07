@@ -42,6 +42,13 @@ if __name__ == '__main__':
         help="The output file (binary)",
     )
 
+    parser.add_argument(
+        "iomux",
+        nargs='?',
+        type=Path,
+        help="iomux configuration (binary)",
+    )
+
     args = parser.parse_args()
 
     # create bytearray for the fpga binary content
@@ -153,6 +160,8 @@ if __name__ == '__main__':
     # if bitstream file == NAME.bit, then the iomux binary will be generated as:
     # NAME_iomux.bin, use this to locate the iomux binary
     iomuxbin_file_path = Path(args.infile.parent).joinpath(args.infile.stem + "_iomux.bin")
+    if (args.iomux):
+        iomuxbin_file_path = args.iomux
     iomux_size = Path(iomuxbin_file_path).stat().st_size
     with open(iomuxbin_file_path, 'rb') as iomuxbin:
         fpga_bin_content_byte_array.extend(iomuxbin.read())

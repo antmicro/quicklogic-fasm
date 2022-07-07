@@ -25,6 +25,13 @@ if __name__ == '__main__':
         help="The output file (Header script)",
     )
 
+    parser.add_argument(
+        "iomux",
+        nargs='?',
+        type=Path,
+        help="iomux configuration (binary)",
+    )
+
     args = parser.parse_args()
 
     ############# BITSTREAM ARRAY #################
@@ -105,6 +112,8 @@ if __name__ == '__main__':
     # if bitstream file == NAME.bit, then the iomux binary will be generated as:
     # NAME_iomux.bin, use this to locate the iomux binary
     iomuxbin_file = Path(args.infile.parent).joinpath(args.infile.stem + "_iomux.bin")
+    if (args.iomux):
+        iomuxbin_file = args.iomux
 
     with open(iomuxbin_file, 'rb') as iomuxbin:
         counter = 1

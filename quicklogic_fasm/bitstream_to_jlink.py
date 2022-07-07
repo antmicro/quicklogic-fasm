@@ -66,6 +66,13 @@ if __name__ == '__main__':
         help="The output file (JLink script)",
     )
 
+    parser.add_argument(
+        "iomux",
+        nargs='?',
+        type=Path,
+        help="iomux configuration (JLink script)",
+    )
+
     args = parser.parse_args()
 
 
@@ -117,6 +124,8 @@ if __name__ == '__main__':
     # if bitstream file == NAME.bit, then the iomux jlink script will be generated as:
     # NAME_iomux.jlink, use this to locate the iomux binary
     iomuxjlink_file = Path(args.infile.parent).joinpath(args.infile.stem + "_iomux.jlink")
+    if (args.iomux):
+        iomuxjlink_file = args.iomux
 
     with open(iomuxjlink_file, 'r') as iomuxjlink:
         iomux_lines = iomuxjlink.readlines()

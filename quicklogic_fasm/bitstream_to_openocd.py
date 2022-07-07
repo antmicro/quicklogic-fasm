@@ -103,6 +103,13 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
+        "iomux",
+        nargs='?',
+        type=Path,
+        help="iomux configuration (OpenOCD script)",
+    )
+
+    parser.add_argument(
         "--osc-freq",
         type=int,
         default=60000000,
@@ -173,6 +180,8 @@ if __name__ == '__main__':
     # if bitstream file == NAME.bit, then the iomux openocd script will be generated as:
     # NAME_iomux.openocd, use this to locate the iomux binary
     iomuxopenocd_file = Path(args.infile.parent).joinpath(args.infile.stem + "_iomux.openocd")
+    if (args.iomux):
+        iomuxopenocd_file = args.iomux
 
     with open(iomuxopenocd_file, 'r') as iomuxopenocd:
         iomux_lines = iomuxopenocd.readlines()
